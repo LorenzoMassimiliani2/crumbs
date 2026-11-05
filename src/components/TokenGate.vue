@@ -28,15 +28,11 @@ async function refreshIdentity(): Promise<boolean> {
   if (!response.ok) return false
 
   const data = (await response.json()) as {
-    credential: string
     email?: string
     name?: string
     picture?: string
   }
-  identity.value =
-    data.credential === 'google'
-      ? { email: data.email, name: data.name, picture: data.picture }
-      : null
+  identity.value = { email: data.email, name: data.name, picture: data.picture }
   return true
 }
 
@@ -192,7 +188,7 @@ onBeforeUnmount(() => {
         </div>
 
         <p v-else class="text-sm text-muted-foreground">
-          Login Google non configurato.
+          Login Google non configurato: imposta `VITE_GOOGLE_CLIENT_ID` nel build.
         </p>
 
         <p v-if="authMessage || error" class="text-sm text-destructive">

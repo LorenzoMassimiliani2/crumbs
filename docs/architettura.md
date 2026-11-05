@@ -13,6 +13,6 @@ Crumbs è un diario alimentare come PWA: frontend Vue servito da Cloudflare Work
 - ticket tracker: `docs/tickets/` (backend: github-source)
 - spec: `docs/spec/`
 - decisioni (ADR): `docs/decisioni/`
-- API: tutte le rotte `/api/*` tranne `/api/health` richiedono `Authorization: Bearer <API_TOKEN>`
+- API: tutte le rotte `/api/*` tranne `/api/health` richiedono `Authorization: Bearer <credenziale>`: ID token Google valido (login utente) oppure `API_TOKEN` (accesso di servizio per script e curl)
 - migrazioni D1: `migrations/`, applicate in locale con `npm run db:migrate:local` e in produzione dalla CI solo su `main`
 - sviluppo locale: `npm run dev:all` (Vite :5173 + wrangler dev :8787, proxy `/api`)

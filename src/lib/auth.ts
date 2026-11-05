@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 
-import { parseCredential, type Credential } from './credential'
+import { parseCredential, serializeCredential, type Credential } from './credential'
 
 export type { Credential } from './credential'
 
@@ -61,7 +61,7 @@ function readCredential(): Credential | null {
 
 export function saveCredential(next: Credential): void {
   credential.value = next
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+  localStorage.setItem(STORAGE_KEY, serializeCredential(next))
   authMessage.value = ''
 }
 
@@ -84,7 +84,7 @@ export function signOut(message = ''): void {
 }
 
 export function isExpired(value: Credential, now = Date.now()): boolean {
-  return value.expiresAt !== null && value.expiresAt - now <= EXPIRY_SKEW_MS
+  return value.expiresAt - now <= EXPIRY_SKEW_MS
 }
 
 export function decodeJwtClaims(token: string): Record<string, unknown> | null {
