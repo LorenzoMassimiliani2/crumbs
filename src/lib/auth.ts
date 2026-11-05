@@ -19,14 +19,6 @@ export interface Identity {
   picture?: string
 }
 
-interface GoogleNotification {
-  isNotDisplayed: () => boolean
-  isSkippedMoment: () => boolean
-  isDismissedMoment: () => boolean
-  getDismissedReason: () => string
-  getSkippedReason: () => string
-}
-
 interface GoogleAccountsId {
   initialize: (config: {
     client_id: string
@@ -34,7 +26,19 @@ interface GoogleAccountsId {
     auto_select?: boolean
     cancel_on_tap_outside?: boolean
   }) => void
-  prompt: (listener?: (notification: GoogleNotification) => void) => void
+  renderButton: (
+    parent: HTMLElement,
+    options: {
+      type?: 'standard' | 'icon'
+      theme?: 'outline' | 'filled_blue' | 'filled_black'
+      size?: 'large' | 'medium' | 'small'
+      text?: 'signin_with' | 'signin' | 'continue_with' | 'signup_with'
+      shape?: 'rectangular' | 'pill' | 'circle' | 'square'
+      logo_alignment?: 'left' | 'center'
+      width?: number
+      locale?: string
+    },
+  ) => void
   disableAutoSelect: () => void
 }
 

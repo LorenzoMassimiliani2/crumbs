@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { KeyRound, LoaderCircle, LogIn } from '@lucide/vue'
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { KeyRound, LoaderCircle } from '@lucide/vue'
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -24,6 +24,7 @@ const token = ref('')
 const error = ref('')
 const checking = ref(false)
 const googleLoading = ref(false)
+const googleButton = ref<HTMLElement | null>(null)
 
 let gisInitialized = false
 
@@ -66,23 +67,52 @@ async function initialCheck(): Promise<void> {
   }
 }
 
-async function initGoogle(): Promise<void> {
-  if (gisInitialized) return
+function renderGoogleButton(): void {
+  const container = googleButton.value
+  const id = window.google?.accounts?.id
+  if (!container || !id) return
 
-  const id = await loadGoogleIdentity()
-  id.initialize({
-    client_id: googleClientId,
-    auto_select: false,
-    cancel_on_tap_outside: true,
-    callback: (response) => {
-      void completeGoogleLogin(response.credential)
-    },
+  container.replaceChildren()
+  id.renderButton(container, {
+    type: 'standard',
+    theme: 'outline',
+    size: 'large',
+    text: 'signin_with',
+    shape: 'rectangular',
+    logo_alignment: 'left',
+    width: Math.min(container.clientWidth || 320, 400),
+    locale: 'it',
   })
-  gisInitialized = true
+}
+
+async function initGoogle(): Promise<void> {
+  error.value = ''
+  googleLoading.value = true
+
+  try {
+    if (!gisInitialized) {
+      const id = await loadGoogleIdentity()
+      id.initialize({
+        client_id: googleClientId,
+        auto_select: false,
+        cancel_on_tap_outside: true,
+        callback: (response) => {
+          void completeGoogleLogin(response.credential)
+        },
+      })
+      gisInitialized = true
+    }
+
+    await nextTick()
+    renderGoogleButton()
+  } catch {
+    error.value = "Login Google non disponibile. Usa l'accesso con token."
+  } finally {
+    googleLoading.value = false
+  }
 }
 
 async function completeGoogleLogin(value: string | undefined): Promise<void> {
-  googleLoading.value = false
   if (!value) {
     error.value = 'Accesso con Google non riuscito.'
     return
@@ -106,38 +136,6 @@ async function completeGoogleLogin(value: string | undefined): Promise<void> {
   } catch {
     clearCredential()
     error.value = 'Impossibile contattare il server.'
-  }
-}
-
-async function loginWithGoogle(): Promise<void> {
-  error.value = ''
-  googleLoading.value = true
-
-  try {
-    await initGoogle()
-    const id = window.google?.accounts?.id
-    if (!id) throw new Error('google identity unavailable')
-
-    id.prompt((notification) => {
-      if (authenticated.value || notification.getSkippedReason() === 'credential_returned') {
-        googleLoading.value = false
-        return
-      }
-
-      if (notification.isDismissedMoment()) {
-        googleLoading.value = false
-        error.value = 'Accesso annullato.'
-      } else if (notification.isNotDisplayed()) {
-        googleLoading.value = false
-        error.value = "Login Google non disponibile. Usa l'accesso con token."
-      } else if (notification.isSkippedMoment()) {
-        googleLoading.value = false
-        error.value = "Nessun account Google disponibile. Usa l'accesso con token."
-      }
-    })
-  } catch {
-    googleLoading.value = false
-    error.value = 'Impossibile avviare il login Google.'
   }
 }
 
@@ -185,12 +183,18 @@ function onVisibilityChange(): void {
   if (document.visibilityState === 'visible') void revalidate()
 }
 
+watch(authenticated, async (value) => {
+  if (value || !ready.value || !gisInitialized) return
+  await nextTick()
+  renderGoogleButton()
+})
+
 onMounted(async () => {
   window.addEventListener('focus', revalidate)
   document.addEventListener('visibilitychange', onVisibilityChange)
 
   await initialCheck()
-  if (!authenticated.value && googleClientId) void initGoogle().catch(() => undefined)
+  if (!authenticated.value && googleClientId) void initGoogle()
 })
 
 onBeforeUnmount(() => {
@@ -213,18 +217,14 @@ onBeforeUnmount(() => {
         </CardDescription>
       </CardHeader>
       <CardContent class="space-y-4">
-        <template v-if="googleClientId">
-          <Button
-            type="button"
-            class="w-full"
-            :disabled="googleLoading || checking"
-            @click="loginWithGoogle"
-          >
-            <LoaderCircle v-if="googleLoading" class="animate-spin" aria-hidden="true" />
-            <LogIn v-else aria-hidden="true" />
-            Accedi con Google
-          </Button>
-        </template>
+        <div v-if="googleClientId" class="flex min-h-10 items-center justify-center">
+          <div ref="googleButton" class="flex justify-center" />
+          <LoaderCircle
+            v-if="googleLoading"
+            class="size-5 animate-spin text-muted-foreground"
+            aria-hidden="true"
+          />
+        </div>
 
         <p v-if="authMessage || error" class="text-sm text-destructive">
           {{ error || authMessage }}
@@ -250,7 +250,6 @@ onBeforeUnmount(() => {
               placeholder="••••••••"
             />
           </div>
-
 
           <Button
             type="submit"
