@@ -125,7 +125,7 @@ async function exportDiary(): Promise<void> {
       exportError.value = body?.error ?? "Esportazione non riuscita."
       return
     }
-    downloadExport((await response.json()) as DiaryExport)
+    await downloadExport((await response.json()) as DiaryExport)
   } catch {
     exportError.value = 'Impossibile contattare il server.'
   } finally {

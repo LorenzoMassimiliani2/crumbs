@@ -99,17 +99,17 @@ function parseItem(value: unknown): MealItemInput | string {
   }
   const per100g = input.per100g as Record<string, unknown>
   const kcal = toNonNegative(per100g.kcal)
-  const protein = toNonNegative(per100g.protein)
-  const carbs = toNonNegative(per100g.carbs)
-  const fat = toNonNegative(per100g.fat)
+  const protein = optionalNutrient(per100g.protein)
+  const carbs = optionalNutrient(per100g.carbs)
+  const fat = optionalNutrient(per100g.fat)
   const fiber = optionalNutrient(per100g.fiber)
   const sugar = optionalNutrient(per100g.sugar)
   const salt = optionalNutrient(per100g.salt)
   if (
     kcal === null ||
-    protein === null ||
-    carbs === null ||
-    fat === null ||
+    protein === undefined ||
+    carbs === undefined ||
+    fat === undefined ||
     fiber === undefined ||
     sugar === undefined ||
     salt === undefined
@@ -209,16 +209,16 @@ async function resolveFavorites(
   return resolved
 }
 
-/** Favorites keep numeric columns, so an unknown nutrient is stored as 0. */
-function favoriteNutritionValues(item: MealItemInput): number[] {
+/** A favorite keeps an unknown nutrient unknown, never zero. */
+function favoriteNutritionValues(item: MealItemInput): (number | null)[] {
   return [
     item.per100g.kcal,
     item.per100g.protein,
     item.per100g.carbs,
     item.per100g.fat,
-    item.per100g.fiber ?? 0,
-    item.per100g.sugar ?? 0,
-    item.per100g.salt ?? 0,
+    item.per100g.fiber,
+    item.per100g.sugar,
+    item.per100g.salt,
   ]
 }
 
@@ -242,14 +242,10 @@ function favoriteStatement(
   now: string,
 ): D1PreparedStatement {
   if (favorite.exists) {
+    // The favorite's name and values belong to the user: a meal only marks it used.
     return env.DB.prepare(
-      `UPDATE foods SET
-         name = ?, brand = ?,
-         kcal_100g = ?, protein_100g = ?, carbs_100g = ?, fat_100g = ?,
-         fiber_100g = ?, sugar_100g = ?, salt_100g = ?,
-         last_used_at = ?, updated_at = ?
-       WHERE id = ? AND user_id = ?`,
-    ).bind(item.name, item.brand, ...favoriteNutritionValues(item), now, now, favorite.id, userId)
+      'UPDATE foods SET last_used_at = ?, updated_at = ? WHERE id = ? AND user_id = ?',
+    ).bind(now, now, favorite.id, userId)
   }
 
   return env.DB.prepare(
@@ -365,9 +361,9 @@ interface ItemRow {
   source_id: string | null
   grams: number
   kcal_100g: number
-  protein_100g: number
-  carbs_100g: number
-  fat_100g: number
+  protein_100g: number | null
+  carbs_100g: number | null
+  fat_100g: number | null
   fiber_100g: number | null
   sugar_100g: number | null
   salt_100g: number | null
@@ -552,12 +548,12 @@ interface FoodRow {
   source: string
   source_id: string | null
   kcal_100g: number
-  protein_100g: number
-  carbs_100g: number
-  fat_100g: number
-  fiber_100g: number
-  sugar_100g: number
-  salt_100g: number
+  protein_100g: number | null
+  carbs_100g: number | null
+  fat_100g: number | null
+  fiber_100g: number | null
+  sugar_100g: number | null
+  salt_100g: number | null
   serving_g: number | null
   serving_label: string | null
   last_used_at: string | null

@@ -12,6 +12,7 @@ import {
   type Day,
   type DayMeal,
   type Food,
+  type FoodSource,
 } from '@/lib/diary'
 import { MEAL_TYPE_LABELS } from '@/lib/meal-types'
 import { apiFetch } from '@/lib/api'
@@ -24,6 +25,12 @@ const loading = ref(true)
 const error = ref('')
 const addOpen = ref(false)
 const editing = ref<DayMeal | null>(null)
+
+const SOURCE_LABELS: Record<FoodSource, string> = {
+  off: 'Open Food Facts',
+  usda: 'USDA',
+  manual: 'Manuale',
+}
 
 const dateLabel = computed(() => {
   const [year, month, dayOfMonth] = selectedDate.value.split('-').map(Number) as [
@@ -52,6 +59,8 @@ const progress = computed(() => {
 async function loadDay(): Promise<void> {
   loading.value = true
   error.value = ''
+  // Never render a previous day's meals under the date being loaded.
+  day.value = null
   try {
     const response = await apiFetch(`/api/days/${selectedDate.value}`)
     if (!response.ok) {
@@ -244,7 +253,7 @@ onMounted(() => {
             <div class="min-w-0">
               <p class="truncate text-sm">{{ item.name }}</p>
               <p class="text-[11px] text-muted-foreground">
-                {{ formatNumber(item.grams) }} g<template v-if="item.brand"> · {{ item.brand }}</template>
+                {{ formatNumber(item.grams) }} g<template v-if="item.brand"> · {{ item.brand }}</template><template v-if="item.source"> · {{ SOURCE_LABELS[item.source] }}</template>
               </p>
             </div>
             <span class="shrink-0 text-sm text-muted-foreground tabular-nums">

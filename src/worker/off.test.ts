@@ -168,24 +168,33 @@ describe('GET /api/foods/search', () => {
     })
   })
 
-  it('drops results missing a required macro', async () => {
+  it('keeps a result with kcal even when the macros are missing', async () => {
     stubSearch({
       hits: [
         {
           code: '999',
-          product_name: 'Senza proteine',
+          product_name: 'Solo kcal',
           brands: ['Marca'],
-          nutriments: { 'energy-kcal_100g': 100, carbohydrates_100g: 10, fat_100g: 2 },
+          nutriments: { 'energy-kcal_100g': 100 },
         },
         KJ_HIT,
       ],
     })
 
     const body = (await (await call(env, '/api/foods/search?q=biscotti')).json()) as {
-      off: { name: string }[]
+      off: { name: string; per100g: Record<string, unknown> }[]
     }
 
-    expect(body.off.map((food) => food.name)).toEqual(['Biscotti secchi'])
+    expect(body.off.map((food) => food.name)).toEqual(['Solo kcal', 'Biscotti secchi'])
+    expect(body.off[0]!.per100g).toEqual({
+      kcal: 100,
+      protein: null,
+      carbs: null,
+      fat: null,
+      fiber: null,
+      sugar: null,
+      salt: null,
+    })
   })
 
   it('sends the app user agent and explicit query fields to the source', async () => {

@@ -108,16 +108,13 @@ function normalize(raw: RawProduct): SearchFood | null {
   const nutriments: RawNutriments =
     source !== null && typeof source === 'object' ? (source as RawNutriments) : {}
   const kcal = kcalOf(nutriments)
-  const protein = numberOrNull(nutriments['proteins_100g'])
-  const carbs = numberOrNull(nutriments['carbohydrates_100g'])
-  const fat = numberOrNull(nutriments['fat_100g'])
-  if (kcal === null || protein === null || carbs === null || fat === null) return null
+  if (kcal === null) return null
 
   const per100g: ItemNutrition = {
     kcal,
-    protein,
-    carbs,
-    fat,
+    protein: numberOrNull(nutriments['proteins_100g']),
+    carbs: numberOrNull(nutriments['carbohydrates_100g']),
+    fat: numberOrNull(nutriments['fat_100g']),
     fiber: numberOrNull(nutriments['fiber_100g']),
     sugar: numberOrNull(nutriments['sugars_100g']),
     salt: saltOf(nutriments),

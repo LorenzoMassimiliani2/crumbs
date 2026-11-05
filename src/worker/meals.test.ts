@@ -472,6 +472,93 @@ describe('favorites upsert', () => {
     expect(day.meals[0]!.items[0]!.per100g).toEqual(PANE_PER_100G)
     expect(day.meals[0]!.items[0]!.totals).toEqual(PANE_TOTALS)
   })
+
+  it('does not rewrite an edited favorite when a later meal uses different values', async () => {
+    await call(env, 'POST', '/api/meals', mealBody())
+    const food = await env.DB.prepare('SELECT id FROM foods').first<{ id: string }>()
+
+    const patched = await call(env, 'PATCH', `/api/foods/${food!.id}`, {
+      name: 'Pane integrale',
+      per100g: { ...PANE_PER_100G, kcal: 400, protein: 15 },
+      servingG: 50,
+    })
+    expect(patched.status).toBe(200)
+
+    const second = await call(
+      env,
+      'POST',
+      '/api/meals',
+      mealBody({
+        occurredAt: '2026-11-06T12:30:00.000Z',
+        localDate: '2026-11-06',
+        items: [
+          {
+            ...PANE,
+            name: 'Pane bianco',
+            brand: 'Altro forno',
+            grams: 100,
+            per100g: { ...PANE_PER_100G, kcal: 300, protein: 9 },
+          },
+        ],
+      }),
+    )
+    expect(second.status).toBe(201)
+
+    const favorite = await env.DB.prepare(
+      'SELECT name, brand, kcal_100g, protein_100g, serving_g FROM foods',
+    ).first<Record<string, unknown>>()
+    expect(favorite).toEqual({
+      name: 'Pane integrale',
+      brand: 'Forno',
+      kcal_100g: 400,
+      protein_100g: 15,
+      serving_g: 50,
+    })
+
+    const day = (await (await call(env, 'GET', '/api/days/2026-11-06')).json()) as {
+      meals: { items: { name: string; per100g: Record<string, unknown> }[] }[]
+    }
+    expect(day.meals[0]!.items[0]).toMatchObject({
+      name: 'Pane bianco',
+      per100g: { kcal: 300, protein: 9 },
+    })
+  })
+
+  it('stores unknown macros as null in both the favorite and the meal item', async () => {
+    const item = { ...PANE, per100g: { kcal: 356 } }
+
+    const response = await call(env, 'POST', '/api/meals', mealBody({ items: [item] }))
+    expect(response.status).toBe(201)
+
+    const meal = (await response.json()) as {
+      items: { per100g: Record<string, unknown> }[]
+      totals: Record<string, number>
+    }
+    expect(meal.items[0]!.per100g).toEqual({
+      kcal: 356,
+      protein: null,
+      carbs: null,
+      fat: null,
+      fiber: null,
+      sugar: null,
+      salt: null,
+    })
+    expect(meal.totals).toMatchObject({ kcal: 534, protein: 0, carbs: 0, fat: 0 })
+
+    const favorite = await env.DB.prepare(
+      'SELECT protein_100g, carbs_100g, fat_100g FROM foods',
+    ).first<Record<string, unknown>>()
+    expect(favorite).toEqual({ protein_100g: null, carbs_100g: null, fat_100g: null })
+
+    const day = (await (await call(env, 'GET', '/api/days/2026-11-05')).json()) as {
+      meals: { items: { per100g: Record<string, unknown> }[] }[]
+    }
+    expect(day.meals[0]!.items[0]!.per100g).toMatchObject({
+      protein: null,
+      carbs: null,
+      fat: null,
+    })
+  })
 })
 
 describe('authentication', () => {

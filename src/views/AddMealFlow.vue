@@ -8,7 +8,9 @@ import { Label } from '@/components/ui/label'
 import { apiFetch } from '@/lib/api'
 import {
   formatKcal,
+  formatNumber,
   itemTotals,
+  round,
   sumTotals,
   type DayMeal,
   type Food,
@@ -16,7 +18,6 @@ import {
   type FoodSource,
   type ItemNutrition,
   type SearchFood,
-  type Totals,
 } from '@/lib/diary'
 import {
   MEAL_TYPE_LABELS,
@@ -251,23 +252,39 @@ function numberField(value: string | number): number {
   return text === '' ? 0 : Number(text)
 }
 
+/** An empty optional field means unknown, not zero. */
+function optionalField(value: string | number): number | null {
+  const text = String(value).trim()
+  return text === '' ? null : Number(text)
+}
+
+function invalidNutrients(per100g: ItemNutrition): boolean {
+  return Object.values(per100g).some(
+    (value) => value !== null && (!Number.isFinite(value) || value < 0),
+  )
+}
+
+function macroText(value: number | null, grams: number): string {
+  return value === null ? '—' : `${formatNumber(round((value * grams) / 100, 2))} g`
+}
+
 function addManual(): void {
   const name = manual.name.trim()
-  const per100g: Totals = {
+  const per100g: ItemNutrition = {
     kcal: numberField(manual.kcal),
-    protein: numberField(manual.protein),
-    carbs: numberField(manual.carbs),
-    fat: numberField(manual.fat),
-    fiber: numberField(manual.fiber),
-    sugar: numberField(manual.sugar),
-    salt: numberField(manual.salt),
+    protein: optionalField(manual.protein),
+    carbs: optionalField(manual.carbs),
+    fat: optionalField(manual.fat),
+    fiber: optionalField(manual.fiber),
+    sugar: optionalField(manual.sugar),
+    salt: optionalField(manual.salt),
   }
 
   if (!name) {
     error.value = "Il nome dell'alimento è obbligatorio."
     return
   }
-  if (Object.values(per100g).some((value) => !Number.isFinite(value) || value < 0)) {
+  if (invalidNutrients(per100g)) {
     error.value = 'I valori per 100 g devono essere numeri non negativi.'
     return
   }
@@ -288,7 +305,10 @@ function addManual(): void {
 
 function fillFoodForm(food: Food): void {
   foodForm.name = food.name
-  for (const macro of FOOD_MACROS) foodForm[macro] = String(food.per100g[macro])
+  for (const macro of FOOD_MACROS) {
+    const value = food.per100g[macro]
+    foodForm[macro] = value === null ? '' : String(value)
+  }
 }
 
 function openFoodEdit(food: Food): void {
@@ -319,20 +339,20 @@ async function saveFoodEdit(): Promise<void> {
   if (!editingFood.value || foodSaving.value) return
 
   const name = foodForm.name.trim()
-  const per100g: Totals = {
+  const per100g: ItemNutrition = {
     kcal: numberField(foodForm.kcal),
-    protein: numberField(foodForm.protein),
-    carbs: numberField(foodForm.carbs),
-    fat: numberField(foodForm.fat),
-    fiber: numberField(foodForm.fiber),
-    sugar: numberField(foodForm.sugar),
-    salt: numberField(foodForm.salt),
+    protein: optionalField(foodForm.protein),
+    carbs: optionalField(foodForm.carbs),
+    fat: optionalField(foodForm.fat),
+    fiber: optionalField(foodForm.fiber),
+    sugar: optionalField(foodForm.sugar),
+    salt: optionalField(foodForm.salt),
   }
   if (!name) {
     foodError.value = "Il nome dell'alimento è obbligatorio."
     return
   }
-  if (Object.values(per100g).some((value) => !Number.isFinite(value) || value < 0)) {
+  if (invalidNutrients(per100g)) {
     foodError.value = 'I valori per 100 g devono essere numeri non negativi.'
     return
   }
@@ -752,7 +772,10 @@ const gramsInputClass =
               <div class="min-w-0">
                 <p class="truncate text-sm">{{ item.name }}</p>
                 <p class="text-xs text-muted-foreground">
-                  {{ formatKcal(itemTotals(item.per100g, item.grams).kcal) }} kcal
+                  {{ formatKcal(itemTotals(item.per100g, item.grams).kcal) }} kcal · P
+                  {{ macroText(item.per100g.protein, item.grams) }} · C
+                  {{ macroText(item.per100g.carbs, item.grams) }} · G
+                  {{ macroText(item.per100g.fat, item.grams) }}
                 </p>
               </div>
               <Button

@@ -97,7 +97,7 @@ describe('POST /api/foods', () => {
       { ...TORTA, name: undefined },
       { ...TORTA, per100g: { ...TORTA_PER_100G, kcal: -1 } },
       { ...TORTA, per100g: { ...TORTA_PER_100G, fat: -0.5 } },
-      { ...TORTA, per100g: { ...TORTA_PER_100G, salt: undefined } },
+      { ...TORTA, per100g: { ...TORTA_PER_100G, salt: 'tanto' } },
       { ...TORTA, per100g: 'no' },
       { ...TORTA, servingG: 0 },
       { ...TORTA, servingG: -10 },
@@ -113,6 +113,29 @@ describe('POST /api/foods', () => {
     }
 
     expect(await listFoods(env)).toEqual([])
+  })
+
+  it('stores omitted optional macros as null instead of zero', async () => {
+    const response = await call(env, 'POST', '/api/foods', {
+      name: 'Mistero',
+      per100g: { kcal: 100, protein: null },
+    })
+    expect(response.status).toBe(201)
+
+    const food = (await response.json()) as { per100g: Record<string, unknown> }
+    expect(food.per100g).toEqual({
+      kcal: 100,
+      protein: null,
+      carbs: null,
+      fat: null,
+      fiber: null,
+      sugar: null,
+      salt: null,
+    })
+
+    expect((await listFoods(env))[0]).toMatchObject({
+      per100g: { kcal: 100, protein: null, carbs: null, fat: null },
+    })
   })
 
   it('stores an optional positive serving', async () => {
@@ -213,13 +236,49 @@ describe('PATCH /api/foods/:id', () => {
     ).toBe(200)
   })
 
+  it('accepts null optional macros and stores them as null', async () => {
+    const food = await createFavorite()
+
+    const response = await call(env, 'PATCH', `/api/foods/${food.id}`, {
+      per100g: { kcal: 400, protein: null },
+    })
+    expect(response.status).toBe(200)
+
+    const updated = (await response.json()) as { per100g: Record<string, unknown> }
+    expect(updated.per100g).toEqual({
+      kcal: 400,
+      protein: null,
+      carbs: null,
+      fat: null,
+      fiber: null,
+      sugar: null,
+      salt: null,
+    })
+  })
+
+  it('returns 409 without writing when the new name belongs to another manual food', async () => {
+    const first = await createFavorite({ name: 'Torta della nonna' })
+    await createFavorite({ name: 'Mela' })
+
+    const response = await call(env, 'PATCH', `/api/foods/${first.id}`, {
+      name: '  MELA ',
+    })
+    expect(response.status).toBe(409)
+    expect(((await response.json()) as { error: string }).error).toEqual(expect.any(String))
+
+    expect((await listFoods(env)).map((food) => food.name).sort()).toEqual([
+      'Mela',
+      'Torta della nonna',
+    ])
+  })
+
   it('rejects invalid values without touching the row', async () => {
     const food = await createFavorite()
     const invalidBodies: unknown[] = [
       {},
       { name: '  ' },
       { per100g: { ...TORTA_PER_100G, kcal: -1 } },
-      { per100g: { ...TORTA_PER_100G, protein: null } },
+      { per100g: { ...TORTA_PER_100G, protein: 'x' } },
       { servingG: 0 },
       { servingLabel: 42 },
       '{',
