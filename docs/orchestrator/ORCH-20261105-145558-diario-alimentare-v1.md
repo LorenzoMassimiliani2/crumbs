@@ -54,7 +54,7 @@ Implementare la SPEC-0001 con TDD, ticket per ticket, commit per ticket su branc
 - [x] 0008 pasti + giorno (merge)
 - [ ] 0009 preferiti
 - [ ] 0010 ricerca OFF
-- [ ] 0012 export
+- [x] 0012 export (merge)
 - [ ] review batch
 - [ ] merge su main (utente)
 
