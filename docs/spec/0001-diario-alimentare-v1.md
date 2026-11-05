@@ -51,7 +51,7 @@ Lo schema è già multi-utente (`user_id` su ogni tabella), ma l'accesso resta l
 22. Come proprietario, voglio cercare tra i miei preferiti mentre digito, così da trovare in un attimo i cibi che mangio spesso.
 23. Come proprietario, voglio che i preferiti siano ordinati per ultimo utilizzo, così che i più frequenti stiano in cima.
 24. Come proprietario, voglio avviare una ricerca esterna con invio o dopo una breve pausa, così da non consumare il limite di richieste dell'API.
-25. Come proprietario, voglio vedere i risultati divisi in "Prodotti confezionati" (Open Food Facts) e "Alimenti generici" (USDA), così da distinguere una marca da un alimento di base.
+25. Come proprietario, voglio scegliere con un selettore accanto alla ricerca se cercare tra "Alimenti semplici" (USDA, default) o "Prodotti confezionati" (Open Food Facts), così da indirizzare la ricerca sulla fonte giusta.
 26. Come proprietario, voglio scegliere un prodotto confezionato e vederne marca e quantità, così da riconoscere quello giusto.
 27. Come proprietario, voglio cercare un alimento generico in italiano (es. "mela") e ottenere il corrispondente USDA, così da non dover cercare in inglese.
 28. Come proprietario, voglio vedere la fonte di ogni alimento, così da sapere quanto fidarmi dei valori.
@@ -96,10 +96,11 @@ Lo schema è già multi-utente (`user_id` su ogni tabella), ma l'accesso resta l
 - [ ] `PATCH /api/foods/:id` aggiorna nome e valori per 100 g; `DELETE /api/foods/:id` elimina il preferito e le voci di pasto conservano lo snapshot con `food_id = NULL`.
 - [ ] `POST /api/foods` crea un alimento manuale con `source = 'manual'`.
 - [ ] La ricerca esterna parte solo con almeno 3 caratteri, su invio o dopo una pausa; non a ogni tasto.
-- [ ] `GET /api/foods/search?q=` interroga Open Food Facts e USDA in parallelo e restituisce due gruppi separati, mai fusi.
-- [ ] I risultati mostrano solo alimenti con kcal presente, al massimo 10 per fonte.
+- [ ] `GET /api/foods/search?q=&source=usda|off` interroga solo la fonte scelta (`source` assente vale `off`); i risultati non vengono mai fusi.
+- [ ] Nell'interfaccia il selettore accanto all'input ha "Alimenti semplici" come default e cambiarlo rilancia la ricerca corrente.
+- [ ] I risultati mostrano solo alimenti con kcal presente, al massimo 10 per ricerca.
 - [ ] La ricerca USDA usa la mappa italiano→inglese; se la voce manca, la query italiana viene passata così com'è e, se non produce risultati utili, resta la creazione manuale.
-- [ ] Senza `USDA_API_KEY` il gruppo "Alimenti generici" è disabilitato con un messaggio esplicito; Open Food Facts e la creazione manuale restano funzionanti.
+- [ ] Senza `USDA_API_KEY` la fonte "Alimenti semplici" mostra un messaggio esplicito; Open Food Facts e la creazione manuale restano funzionanti.
 - [ ] Su 429 o 503 di Open Food Facts viene servita la cache D1 scaduta se presente, altrimenti un messaggio "riprova"; nessun retry aggressivo.
 - [ ] Le risposte delle API esterne sono trimmate ai soli campi usati prima di essere salvate in `api_cache`; la cache delle query scade dopo 7 giorni, quella di prodotti e alimenti dopo 30.
 - [ ] Ogni alimento espone `source` e la relativa attribuzione: "Dati da Open Food Facts (ODbL)" o "Fonte: USDA FoodData Central (CC0)".
@@ -190,7 +191,7 @@ Il file `.xlsx` è generato lato client; il Worker espone solo i dati JSON dell'
 - Finestre dei tipi pasto in un unico file di costanti, come elencato negli acceptance criteria.
 - Open Food Facts: `fields` espliciti, User-Agent `Crumbs/0.1 (<ALLOWED_EMAIL>)`, ricerca min 3 caratteri, cache query 7 giorni, prodotti 30.
 - USDA: `USDA_API_KEY` come secret; senza secret il gruppo generici è disabilitato.
-- Mappa italiano→inglese in `src/worker/usda-aliases.ts`, circa 150 voci sui cibi ricorrenti, revisionabile.
+- Mappa italiano→inglese in `src/worker/usda-aliases.ts`, circa 180 voci sui cibi ricorrenti, revisionabile.
 - Dipendenza client per `.xlsx`: SheetJS (`xlsx`).
 
 ## Seams

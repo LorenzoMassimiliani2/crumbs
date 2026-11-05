@@ -75,7 +75,7 @@ API disponibili:
 - `GET /api/days/:date` → pasti, voci e totali del giorno
 - `POST /api/meals`, `PUT/DELETE /api/meals/:id` → crea, sostituisce, cancella un pasto
 - `GET/POST /api/foods`, `PATCH/DELETE /api/foods/:id` → preferiti
-- `GET /api/foods/search?q=` → ricerca su Open Food Facts (gruppo `off`)
+- `GET /api/foods/search?q=&source=off|usda` → ricerca sulla fonte scelta (default `off`)
 - `GET /api/foods/off/:code` → prodotto per codice a barre
 - `GET /api/export?from=&to=` → dati JSON per l'export `.xlsx`
 

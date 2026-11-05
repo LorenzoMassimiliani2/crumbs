@@ -9,7 +9,7 @@ phases: [implement, review, merge]
 # ORCH-20261105-145558 — Diario alimentare v1
 
 ## Goal
-Implementare la SPEC-0001 con TDD, ticket per ticket, commit per ticket su branch dedicati. Restano fuori `0011` (bloccato dalla chiave USDA umana, ticket `0013`).
+Implementare la SPEC-0001 con TDD, ticket per ticket, commit per ticket su branch dedicati. La ricerca USDA funziona; per usarla serve la chiave del ticket `0013`.
 
 ## Contract (per fase)
 | Fase | Autonomia | Chi decide |
@@ -46,7 +46,7 @@ Implementare la SPEC-0001 con TDD, ticket per ticket, commit per ticket su branc
 | TICKET-0010 | `ticket/TICKET-0010` | mergiato |
 | TICKET-0012 | `ticket/TICKET-0012` | mergiato |
 | FIX-review | `ticket/FIX-review` | mergiato |
-| TICKET-0011 | — | bloccato da 0013 (chiave USDA) |
+| TICKET-0011 | `ticket/TICKET-0011` | mergiato |
 
 ## Avanzamento
 - [x] Contract concordato
@@ -60,7 +60,7 @@ Implementare la SPEC-0001 con TDD, ticket per ticket, commit per ticket su branc
 - [x] Review standards + spec
 - [x] Correzioni review (nutrienti null, preferiti non sovrascritti, giorno stale, fonte in Oggi, 409, SheetJS lazy)
 - [x] Spec e README allineati
-- [ ] 0011 fallback USDA — bloccato da 0013
+- [x] 0011 ricerca USDA con selettore di fonte
 - [ ] Merge su main (utente)
 
 ## Esito review
