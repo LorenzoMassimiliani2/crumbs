@@ -1,5 +1,6 @@
 import { verifyGoogleIdToken, type GoogleClaims } from './auth'
 import type { Env } from './env'
+import { exportDiary } from './export'
 import { createMeal, deleteMeal, getDay, listFoods, updateMeal } from './meals'
 import { parseProfile, profileFromRow } from './profile'
 
@@ -167,6 +168,11 @@ const routes: ApiRoute[] = [
     method: 'GET',
     pattern: /^\/api\/foods$/,
     handler: (_request, env, userId) => listFoods(env, userId),
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/export$/,
+    handler: (request, env, userId) => exportDiary(request, env, userId),
   },
 ]
 

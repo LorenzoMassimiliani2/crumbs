@@ -33,7 +33,7 @@ export interface MealFields {
 
 export type ParsedMeal = { ok: true; value: MealFields } | { ok: false; error: string }
 
-function isRealDate(value: unknown): value is string {
+export function isRealDate(value: unknown): value is string {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
   const [year, month, day] = value.split('-').map(Number) as [number, number, number]
   const date = new Date(Date.UTC(year, month - 1, day))

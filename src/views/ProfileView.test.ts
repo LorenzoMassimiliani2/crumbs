@@ -1,8 +1,14 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { downloadExport } from '@/lib/export'
 import { fetchStub } from '@/test/fetch'
 import ProfileView from './ProfileView.vue'
+
+vi.mock('@/lib/export', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/export')>()
+  return { ...actual, downloadExport: vi.fn() }
+})
 
 const SAVED_PROFILE = {
   weight: 78,
@@ -69,5 +75,64 @@ describe('ProfileView', () => {
     expect(put).toBeDefined()
     expect(await put!.json()).toEqual(SAVED_PROFILE)
     expect(wrapper.text()).toContain('Salvato')
+  })
+})
+
+describe('ProfileView export', () => {
+  const EXPORT = {
+    from: '2026-11-01',
+    to: '2026-11-30',
+    targetKcal: 2200,
+    items: [],
+    days: [],
+  }
+
+  beforeEach(() => {
+    vi.mocked(downloadExport).mockClear()
+    fetchStub().intercept(/\/api\/profile$/, () => Response.json(SAVED_PROFILE))
+  })
+
+  it('defaults the range to the current month and downloads the selected export', async () => {
+    fetchStub().intercept(/\/api\/export\?/, () => Response.json(EXPORT))
+
+    const wrapper = mount(ProfileView)
+    await flushPromises()
+
+    expect((wrapper.get('#export-from').element as HTMLInputElement).value).toBe('2026-11-01')
+    expect((wrapper.get('#export-to').element as HTMLInputElement).value).toBe('2026-11-30')
+
+    await wrapper.get('[data-testid="export"]').trigger('click')
+    await flushPromises()
+
+    const requested = fetchStub().requests.find((request) => request.url.includes('/api/export'))
+    expect(requested).toBeDefined()
+    const url = new URL(requested!.url)
+    expect(url.searchParams.get('from')).toBe('2026-11-01')
+    expect(url.searchParams.get('to')).toBe('2026-11-30')
+
+    expect(downloadExport).toHaveBeenCalledTimes(1)
+    expect(downloadExport).toHaveBeenCalledWith(EXPORT)
+  })
+
+  it('sends a custom range and does not download when the API fails', async () => {
+    fetchStub().intercept(/\/api\/export\?/, () =>
+      Response.json({ error: 'Intervallo non valido.' }, { status: 400 }),
+    )
+
+    const wrapper = mount(ProfileView)
+    await flushPromises()
+
+    await wrapper.get('#export-from').setValue('2026-10-01')
+    await wrapper.get('#export-to').setValue('2026-10-31')
+    await wrapper.get('[data-testid="export"]').trigger('click')
+    await flushPromises()
+
+    const requested = fetchStub().requests.find((request) => request.url.includes('/api/export'))
+    const url = new URL(requested!.url)
+    expect(url.searchParams.get('from')).toBe('2026-10-01')
+    expect(url.searchParams.get('to')).toBe('2026-10-31')
+
+    expect(downloadExport).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('Intervallo non valido.')
   })
 })

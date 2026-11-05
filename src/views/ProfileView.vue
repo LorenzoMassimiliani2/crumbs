@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { apiFetch } from '@/lib/api'
+import { currentMonthRange, downloadExport, type DiaryExport } from '@/lib/export'
 import { ageAt, bmi, mifflinStJeorBmr } from '@/lib/health'
 
 interface ProfileResponse {
@@ -28,6 +29,12 @@ const loading = ref(true)
 const saving = ref(false)
 const message = ref('')
 const error = ref('')
+
+const initialRange = currentMonthRange()
+const exportFrom = ref(initialRange.from)
+const exportTo = ref(initialRange.to)
+const exporting = ref(false)
+const exportError = ref('')
 
 function numberOrNull(value: string | number): number | null {
   if (typeof value === 'string' && value.trim() === '') return null
@@ -104,6 +111,25 @@ async function save(): Promise<void> {
     error.value = 'Impossibile contattare il server.'
   } finally {
     saving.value = false
+  }
+}
+
+async function exportDiary(): Promise<void> {
+  exporting.value = true
+  exportError.value = ''
+  try {
+    const query = new URLSearchParams({ from: exportFrom.value, to: exportTo.value })
+    const response = await apiFetch(`/api/export?${query}`)
+    if (!response.ok) {
+      const body = (await response.json().catch(() => null)) as { error?: string } | null
+      exportError.value = body?.error ?? "Esportazione non riuscita."
+      return
+    }
+    downloadExport((await response.json()) as DiaryExport)
+  } catch {
+    exportError.value = 'Impossibile contattare il server.'
+  } finally {
+    exporting.value = false
   }
 }
 
@@ -208,6 +234,40 @@ onMounted(load)
           <p v-if="error" role="alert" class="text-sm text-destructive">{{ error }}</p>
         </div>
       </form>
+    </CardContent>
+  </Card>
+
+  <Card class="mt-4">
+    <CardHeader>
+      <CardTitle>Esporta i dati</CardTitle>
+      <CardDescription>
+        Scarica le voci dei pasti e i totali giornalieri di un intervallo in un file Excel.
+      </CardDescription>
+    </CardHeader>
+
+    <CardContent>
+      <div class="grid grid-cols-2 gap-3">
+        <div class="space-y-1.5">
+          <Label for="export-from">Dal</Label>
+          <Input id="export-from" v-model="exportFrom" type="date" />
+        </div>
+        <div class="space-y-1.5">
+          <Label for="export-to">Al</Label>
+          <Input id="export-to" v-model="exportTo" type="date" />
+        </div>
+      </div>
+
+      <div class="mt-3 flex items-center gap-3">
+        <Button
+          type="button"
+          data-testid="export"
+          :disabled="exporting"
+          @click="exportDiary"
+        >
+          {{ exporting ? 'Preparazione…' : 'Esporta Excel' }}
+        </Button>
+        <p v-if="exportError" role="alert" class="text-sm text-destructive">{{ exportError }}</p>
+      </div>
     </CardContent>
   </Card>
 </template>
