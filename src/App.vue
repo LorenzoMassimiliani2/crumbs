@@ -1,0 +1,25 @@
+<script setup lang="ts">
+import { UtensilsCrossed } from '@lucide/vue'
+import { RouterView } from 'vue-router'
+</script>
+
+<template>
+  <div class="flex min-h-svh flex-col bg-background">
+    <header
+      class="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/75"
+    >
+      <div class="mx-auto flex h-14 w-full max-w-2xl items-center gap-2 px-4">
+        <span
+          class="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground"
+        >
+          <UtensilsCrossed class="size-4" aria-hidden="true" />
+        </span>
+        <span class="text-base font-semibold tracking-tight">Crumbs</span>
+      </div>
+    </header>
+
+    <main class="mx-auto w-full max-w-2xl flex-1 px-4 py-6">
+      <RouterView />
+    </main>
+  </div>
+</template>
