@@ -229,3 +229,88 @@ describe('HomeView', () => {
     expect(wrapper.text()).toContain('Mela')
   })
 })
+
+describe('favorite management', () => {
+  it('edits a favorite from the add-meal flow and shows the outcome', async () => {
+    stubDay()
+    fetchStub().intercept(
+      (request) => request.method === 'PATCH' && request.url.endsWith('/api/foods/food-mela'),
+      () => Response.json({ ...FAVORITES[0], name: 'Mela Golden' }),
+    )
+
+    const wrapper = mount(HomeView)
+    await flushPromises()
+
+    await wrapper.get('[data-testid="add-meal"]').trigger('click')
+    await flushPromises()
+
+    await wrapper.get('[aria-label="Modifica preferito Mela"]').trigger('click')
+    expect((wrapper.get('#edit-food-name').element as HTMLInputElement).value).toBe('Mela')
+    expect((wrapper.get('#edit-food-kcal').element as HTMLInputElement).value).toBe('52')
+
+    await wrapper.get('#edit-food-name').setValue('Mela Golden')
+    await wrapper.get('#edit-food-kcal').setValue('60')
+    await wrapper.get('[data-testid="save-food-edit"]').trigger('click')
+    await flushPromises()
+
+    const patch = fetchStub().requests.find((request) => request.method === 'PATCH')!
+    expect(patch.url).toMatch(/\/api\/foods\/food-mela$/)
+    expect(await patch.json()).toEqual({
+      name: 'Mela Golden',
+      per100g: { ...FAVORITES[0]!.per100g, kcal: 60 },
+    })
+
+    expect(wrapper.text()).toContain('Preferito aggiornato')
+    const listRequests = fetchStub().requests.filter(
+      (request) => request.method === 'GET' && /\/api\/foods$/.test(request.url),
+    )
+    expect(listRequests).toHaveLength(2)
+  })
+
+  it('asks for confirmation before deleting a favorite and explains the past meals', async () => {
+    stubDay()
+    fetchStub().intercept(
+      (request) => request.method === 'DELETE' && request.url.endsWith('/api/foods/food-mela'),
+      () => new Response(null, { status: 204 }),
+    )
+
+    const wrapper = mount(HomeView)
+    await flushPromises()
+
+    await wrapper.get('[data-testid="add-meal"]').trigger('click')
+    await flushPromises()
+
+    await wrapper.get('[aria-label="Elimina preferito Mela"]').trigger('click')
+    expect(fetchStub().requests.some((request) => request.method === 'DELETE')).toBe(false)
+    expect(wrapper.get('[data-testid="confirm-delete-food"]').text()).toContain(
+      'I pasti già registrati non cambiano',
+    )
+
+    await wrapper.get('[data-testid="confirm-delete-food-button"]').trigger('click')
+    await flushPromises()
+
+    const remove = fetchStub().requests.find((request) => request.method === 'DELETE')!
+    expect(remove.url).toMatch(/\/api\/foods\/food-mela$/)
+    expect(wrapper.text()).toContain('Preferito eliminato')
+  })
+
+  it('keeps the edit form open and shows the server error when saving fails', async () => {
+    stubDay()
+    fetchStub().intercept(
+      (request) => request.method === 'PATCH',
+      () => Response.json({ error: 'Valori non validi' }, { status: 400 }),
+    )
+
+    const wrapper = mount(HomeView)
+    await flushPromises()
+
+    await wrapper.get('[data-testid="add-meal"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[aria-label="Modifica preferito Mela"]').trigger('click')
+    await wrapper.get('[data-testid="save-food-edit"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Valori non validi')
+    expect(wrapper.find('#edit-food-name').exists()).toBe(true)
+  })
+})
