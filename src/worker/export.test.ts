@@ -91,12 +91,12 @@ interface ExportItem {
   name: string
   grams: number
   kcal: number
-  protein: number
-  carbs: number
-  fat: number
-  fiber: number
-  sugar: number
-  salt: number
+  protein: number | null
+  carbs: number | null
+  fat: number | null
+  fiber: number | null
+  sugar: number | null
+  salt: number | null
   source: string
 }
 
@@ -230,6 +230,30 @@ describe('GET /api/export', () => {
         fat: 2.65,
       },
     ])
+  })
+
+  it('returns null for nutrients the meal item does not know', async () => {
+    await createMeal(env, mealBody({ items: [{ ...PANE, per100g: { kcal: 100 } }] }))
+
+    const payload = (await (
+      await call(env, '/api/export?from=2026-11-01&to=2026-11-30')
+    ).json()) as ExportPayload
+
+    expect(payload.items[0]).toMatchObject({
+      kcal: 150,
+      protein: null,
+      carbs: null,
+      fat: null,
+      fiber: null,
+      sugar: null,
+      salt: null,
+    })
+    expect(payload.days[0]).toMatchObject({
+      kcal: 150,
+      protein: 0,
+      carbs: 0,
+      fat: 0,
+    })
   })
 
   it('honours the date range boundaries and excludes a deleted meal', async () => {

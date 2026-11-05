@@ -12,12 +12,12 @@ export interface Totals {
   salt: number
 }
 
-/** Values stored on a meal item: kcal and macros are required, the rest may be unknown. */
+/** Values per 100 g: kcal is required, every macro may be unknown. */
 export interface ItemNutrition {
   kcal: number
-  protein: number
-  carbs: number
-  fat: number
+  protein: number | null
+  carbs: number | null
+  fat: number | null
   fiber: number | null
   sugar: number | null
   salt: number | null
@@ -29,7 +29,7 @@ export interface Food {
   brand: string | null
   source: FoodSource
   sourceId: string | null
-  per100g: Totals
+  per100g: ItemNutrition
   servingG?: number | null
   servingLabel?: string | null
   lastUsedAt: string | null
@@ -94,17 +94,33 @@ export function round(value: number, digits = 2): number {
   return Math.round(value * factor) / factor
 }
 
-/** Totals ignore unknown nutrients: a null contributes 0 to the day. */
-export function itemTotals(per100g: ItemNutrition, grams: number): Totals {
+/** Scales per-100 g values to a portion, keeping an unknown nutrient unknown. */
+export function itemNutrientTotals(per100g: ItemNutrition, grams: number): ItemNutrition {
   const ratio = grams / 100
+  const scaled = (value: number | null): number | null =>
+    value === null ? null : round(value * ratio, 2)
   return {
     kcal: round(per100g.kcal * ratio, 1),
-    protein: round(per100g.protein * ratio, 2),
-    carbs: round(per100g.carbs * ratio, 2),
-    fat: round(per100g.fat * ratio, 2),
-    fiber: round((per100g.fiber ?? 0) * ratio, 2),
-    sugar: round((per100g.sugar ?? 0) * ratio, 2),
-    salt: round((per100g.salt ?? 0) * ratio, 2),
+    protein: scaled(per100g.protein),
+    carbs: scaled(per100g.carbs),
+    fat: scaled(per100g.fat),
+    fiber: scaled(per100g.fiber),
+    sugar: scaled(per100g.sugar),
+    salt: scaled(per100g.salt),
+  }
+}
+
+/** Totals ignore unknown nutrients: a null contributes 0 to the day. */
+export function itemTotals(per100g: ItemNutrition, grams: number): Totals {
+  const item = itemNutrientTotals(per100g, grams)
+  return {
+    kcal: item.kcal,
+    protein: item.protein ?? 0,
+    carbs: item.carbs ?? 0,
+    fat: item.fat ?? 0,
+    fiber: item.fiber ?? 0,
+    sugar: item.sugar ?? 0,
+    salt: item.salt ?? 0,
   }
 }
 

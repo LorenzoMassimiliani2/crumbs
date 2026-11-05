@@ -1,9 +1,16 @@
-import { itemTotals, round, sumTotals, type FoodSource, type Totals } from '../lib/diary'
+import {
+  itemNutrientTotals,
+  round,
+  sumTotals,
+  type FoodSource,
+  type ItemNutrition,
+  type Totals,
+} from '../lib/diary'
 import type { MealType } from '../lib/meal-types'
 import type { Env } from './env'
 import { isRealDate } from './meals'
 
-export interface ExportItem extends Totals {
+export interface ExportItem extends ItemNutrition {
   date: string
   type: MealType
   name: string
@@ -28,12 +35,12 @@ interface ItemRow {
   source: string
   grams: number
   kcal_100g: number
-  protein_100g: number
-  carbs_100g: number
-  fat_100g: number
-  fiber_100g: number
-  sugar_100g: number
-  salt_100g: number
+  protein_100g: number | null
+  carbs_100g: number | null
+  fat_100g: number | null
+  fiber_100g: number | null
+  sugar_100g: number | null
+  salt_100g: number | null
 }
 
 function badRequest(error: string): Response {
@@ -76,7 +83,7 @@ export async function exportDiary(
   const dayTotals = new Map<string, Totals[]>()
 
   for (const row of rows.results) {
-    const per100g: Totals = {
+    const per100g: ItemNutrition = {
       kcal: row.kcal_100g,
       protein: row.protein_100g,
       carbs: row.carbs_100g,
@@ -85,19 +92,27 @@ export async function exportDiary(
       sugar: row.sugar_100g,
       salt: row.salt_100g,
     }
-    const totals = itemTotals(per100g, row.grams)
+    const item = itemNutrientTotals(per100g, row.grams)
 
     items.push({
       date: row.date,
       type: row.type as MealType,
       name: row.name,
       grams: row.grams,
-      ...totals,
+      ...item,
       source: row.source as FoodSource,
     })
 
     const list = dayTotals.get(row.date) ?? []
-    list.push(totals)
+    list.push({
+      kcal: item.kcal,
+      protein: item.protein ?? 0,
+      carbs: item.carbs ?? 0,
+      fat: item.fat ?? 0,
+      fiber: item.fiber ?? 0,
+      sugar: item.sugar ?? 0,
+      salt: item.salt ?? 0,
+    })
     dayTotals.set(row.date, list)
   }
 

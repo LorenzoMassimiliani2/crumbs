@@ -1,4 +1,4 @@
-import type { Food, FoodSource, Totals } from '../lib/diary'
+import type { Food, FoodSource, ItemNutrition } from '../lib/diary'
 import type { Env } from './env'
 
 const MAX_NAME = 120
@@ -8,14 +8,14 @@ const MAX_PER_100G = 100000
 
 export interface FoodFields {
   name: string
-  per100g: Totals
+  per100g: ItemNutrition
   servingG: number | null
   servingLabel: string | null
 }
 
 export type ParsedFood = { ok: true; value: FoodFields } | { ok: false; error: string }
 
-const MACROS = ['kcal', 'protein', 'carbs', 'fat', 'fiber', 'sugar', 'salt'] as const
+const OPTIONAL_MACROS = ['protein', 'carbs', 'fat', 'fiber', 'sugar', 'salt'] as const
 
 function optionalText(value: unknown, maxLength: number): string | null | undefined {
   if (value === undefined || value === null) return null
@@ -30,12 +30,28 @@ function toNumber(value: unknown): number | null {
   return value
 }
 
-function parsePer100g(value: unknown): Totals | string {
+function parsePer100g(value: unknown): ItemNutrition | string {
   if (value === null || typeof value !== 'object') return 'I valori per 100 g non sono validi.'
   const input = value as Record<string, unknown>
-  const totals = {} as Totals
-  for (const macro of MACROS) {
-    const amount = toNumber(input[macro])
+
+  const kcal = toNumber(input.kcal)
+  if (kcal === null || kcal < 0 || kcal > MAX_PER_100G) {
+    return 'I valori per 100 g devono essere numeri non negativi.'
+  }
+
+  const totals: ItemNutrition = {
+    kcal,
+    protein: null,
+    carbs: null,
+    fat: null,
+    fiber: null,
+    sugar: null,
+    salt: null,
+  }
+  for (const macro of OPTIONAL_MACROS) {
+    const raw = input[macro]
+    if (raw === undefined || raw === null) continue
+    const amount = toNumber(raw)
     if (amount === null || amount < 0 || amount > MAX_PER_100G) {
       return 'I valori per 100 g devono essere numeri non negativi.'
     }
@@ -78,7 +94,7 @@ export function parseFoodInput(body: unknown): ParsedFood {
   return { ok: true, value: { name, per100g, servingG, servingLabel } }
 }
 
-function numbers(per100g: Totals): number[] {
+function numbers(per100g: ItemNutrition): (number | null)[] {
   return [per100g.kcal, per100g.protein, per100g.carbs, per100g.fat, per100g.fiber, per100g.sugar, per100g.salt]
 }
 
@@ -89,12 +105,12 @@ interface FoodRow {
   source: string
   source_id: string | null
   kcal_100g: number
-  protein_100g: number
-  carbs_100g: number
-  fat_100g: number
-  fiber_100g: number
-  sugar_100g: number
-  salt_100g: number
+  protein_100g: number | null
+  carbs_100g: number | null
+  fat_100g: number | null
+  fiber_100g: number | null
+  sugar_100g: number | null
+  salt_100g: number | null
   serving_g: number | null
   serving_label: string | null
   last_used_at: string | null
@@ -205,7 +221,7 @@ export type ParsedFoodPatch =
       ok: true
       value: {
         name?: string
-        per100g?: Totals
+        per100g?: ItemNutrition
         servingG?: number | null
         servingLabel?: string | null
       }
@@ -269,6 +285,22 @@ export async function updateFood(
   const parsed = parseFoodPatch(await readJson(request))
   if (!parsed.ok) return badRequest(parsed.error)
   const patch = parsed.value
+
+  if (patch.name !== undefined && existing.source_id === null) {
+    const duplicate = await env.DB.prepare(
+      `SELECT id FROM foods
+       WHERE user_id = ? AND source_id IS NULL AND id <> ?
+         AND lower(trim(name)) = lower(trim(?))`,
+    )
+      .bind(userId, id, patch.name)
+      .first<{ id: string }>()
+    if (duplicate) {
+      return Response.json(
+        { error: 'Esiste già un alimento con questo nome.' },
+        { status: 409 },
+      )
+    }
+  }
 
   await env.DB.prepare(
     `UPDATE foods SET
