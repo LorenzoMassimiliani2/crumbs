@@ -3,6 +3,7 @@ import { LogOut } from '@lucide/vue'
 import { computed } from 'vue'
 import { RouterView } from 'vue-router'
 
+import BottomTabs from '@/components/BottomTabs.vue'
 import TokenGate from '@/components/TokenGate.vue'
 import { Button } from '@/components/ui/button'
 import { identity, signOut } from '@/lib/auth'
@@ -35,9 +36,11 @@ const accountLabel = computed(() => identity.value?.email ?? '')
         </div>
       </header>
 
-      <main class="mx-auto w-full max-w-2xl flex-1 px-4 py-6">
+      <main class="mx-auto w-full max-w-2xl flex-1 px-4 py-6 pb-24">
         <RouterView />
       </main>
+
+      <BottomTabs />
     </div>
   </TokenGate>
 </template>
