@@ -52,7 +52,7 @@ Implementare la SPEC-0001 con TDD, ticket per ticket, commit per ticket su branc
 - [x] 0006 seam di test (merge 8e37da7)
 - [x] 0007 schema + profilo (merge)
 - [x] 0008 pasti + giorno (merge)
-- [ ] 0009 preferiti
+- [x] 0009 preferiti (merge af90f40)
 - [ ] 0010 ricerca OFF
 - [x] 0012 export (merge)
 - [ ] review batch
