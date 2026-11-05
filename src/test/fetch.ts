@@ -8,6 +8,15 @@ interface Route {
   responder: Responder
 }
 
+const TEST_ORIGIN = 'https://crumbs.test'
+
+function resolveUrl(input: RequestInfo | URL): RequestInfo | URL {
+  if (typeof input === 'string' && input.startsWith('/')) {
+    return new URL(input, TEST_ORIGIN)
+  }
+  return input
+}
+
 function matches(matcher: Matcher, request: Request): boolean {
   if (typeof matcher === 'string') return request.url === matcher
   if (matcher instanceof RegExp) return matcher.test(request.url)
@@ -24,7 +33,10 @@ export class FetchStub {
   }
 
   handle = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    const request = input instanceof Request && init === undefined ? input : new Request(input, init)
+    const request =
+      input instanceof Request && init === undefined
+        ? input
+        : new Request(resolveUrl(input), init)
     this.requests.push(request)
 
     for (const route of this.routes) {
