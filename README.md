@@ -45,18 +45,31 @@ src/
   style.css               # Tailwind + tema shadcn
 ```
 
-## Deploy su Cloudflare Pages
+## Deploy su Cloudflare Workers
 
-1. Su https://dash.cloudflare.com/ → **Workers & Pages** → **Create** → **Pages** → **Connect to Git**.
-2. Collega il repository GitHub e imposta:
-   - Production branch: `main`
-   - Framework preset: `Vue`
-   - Build command: `npm run build`
-   - Build output directory: `dist`
-3. In **Settings → Environment variables** aggiungi `NODE_VERSION=22`.
-4. Ogni push su `main` genera un deploy di produzione; gli altri branch generano preview deployment.
+Il progetto usa Workers con static assets (`wrangler.jsonc`). La cartella pubblicata è `dist/`, già configurata nel file: la dashboard non chiede la build output directory.
 
-Non è configurato alcun workflow GitHub Actions: il deploy lo gestisce l'integrazione Git di Cloudflare.
+Su https://dash.cloudflare.com/ → **Workers & Pages** → **Create** → **Workers** → **Connect to Git**:
+
+| Campo | Valore |
+|---|---|
+| Production branch | `main` |
+| Build command | `npm run build` |
+| Deploy command | `npx wrangler deploy` |
+| Preview command (non-production) | `npx wrangler versions upload` |
+
+Il token API va lasciato vuoto: Cloudflare lo genera e lo gestisce da solo quando colleghi il repo dalla dashboard.
+
+Ogni push su `main` genera un deploy di produzione; gli altri branch generano una versione di preview.
+
+In locale il deploy manuale è:
+
+```bash
+npm run build
+npx wrangler deploy
+```
+
+Routing SPA: gestito da `assets.not_found_handling: "single-page-application"` in `wrangler.jsonc`.
 
 ## Test e lint
 
