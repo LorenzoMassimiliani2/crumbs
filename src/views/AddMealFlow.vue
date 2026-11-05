@@ -75,8 +75,10 @@ const confirmingDelete = ref(false)
 const searchResults = ref<SearchFood[]>([])
 const searching = ref(false)
 const searchError = ref('')
+const usdaMissing = ref(false)
 const addingCode = ref<string | null>(null)
 const searchedTerm = ref('')
+const source = ref<'usda' | 'off'>('usda')
 
 const SEARCH_PAUSE_MS = 600
 let searchTimer: ReturnType<typeof setTimeout> | null = null
@@ -149,6 +151,7 @@ function resetSearch(): void {
   clearSearchTimer()
   searchResults.value = []
   searchError.value = ''
+  usdaMissing.value = false
   searchedTerm.value = ''
   searching.value = false
 }
@@ -170,29 +173,45 @@ async function runSearch(): Promise<void> {
   const term = query.value.trim()
   if (term.length < 3) return
 
+  const requestedSource = source.value
   searching.value = true
   searchError.value = ''
+  usdaMissing.value = false
   searchedTerm.value = term
 
   try {
-    const response = await apiFetch(`/api/foods/search?q=${encodeURIComponent(term)}`)
-    if (query.value.trim() !== term) return
+    const response = await apiFetch(
+      `/api/foods/search?q=${encodeURIComponent(term)}&source=${requestedSource}`,
+    )
+    if (query.value.trim() !== term || source.value !== requestedSource) return
     if (!response.ok) {
-      const body = (await response.json().catch(() => null)) as { error?: string } | null
+      const body = (await response.json().catch(() => null)) as {
+        error?: string
+        code?: string
+      } | null
       searchResults.value = []
       searchError.value = body?.error ?? 'Ricerca non riuscita. Riprova.'
+      usdaMissing.value = body?.code === 'usda_not_configured'
       return
     }
     const body = (await response.json()) as FoodSearchResponse
-    searchResults.value = body.off ?? []
+    searchResults.value = body[requestedSource] ?? []
   } catch {
-    if (query.value.trim() === term) {
+    if (query.value.trim() === term && source.value === requestedSource) {
       searchResults.value = []
       searchError.value = 'Impossibile contattare il server.'
     }
   } finally {
-    searching.value = false
+    if (source.value === requestedSource) searching.value = false
   }
+}
+
+function addResult(food: SearchFood): void {
+  if (food.source === 'off') {
+    void addProduct(food)
+    return
+  }
+  addSearchFood(food)
 }
 
 function addSearchFood(food: SearchFood): void {
@@ -231,6 +250,10 @@ async function addProduct(food: SearchFood): Promise<void> {
 }
 
 watch(query, scheduleSearch)
+watch(source, () => {
+  if (query.value.trim().length >= 3) void runSearch()
+  else resetSearch()
+})
 onBeforeUnmount(clearSearchTimer)
 
 function setGrams(item: DraftItem, event: Event): void {
@@ -525,20 +548,36 @@ const gramsInputClass =
         <section class="space-y-2">
           <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Preferiti</p>
 
-          <div class="relative">
-            <Search
-              class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <Input
-              v-model="query"
-              type="search"
-              aria-label="Cerca nei preferiti"
-              placeholder="Cerca un alimento"
-              class="pl-9"
-              @keydown.enter.prevent="runSearch"
-            />
+          <div class="flex gap-2">
+            <div class="relative min-w-0 flex-1">
+              <Search
+                class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <Input
+                v-model="query"
+                type="search"
+                aria-label="Cerca nei preferiti"
+                placeholder="Cerca un alimento"
+                class="pl-9"
+                @keydown.enter.prevent="runSearch"
+              />
+            </div>
+            <select
+              v-model="source"
+              data-testid="source-select"
+              aria-label="Fonte di ricerca"
+              class="h-9 shrink-0 rounded-md border border-input bg-transparent px-2.5 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              <option value="usda">Alimenti semplici</option>
+              <option value="off">Prodotti confezionati</option>
+            </select>
           </div>
+
+          <p v-if="searchError" data-testid="search-error" role="alert" class="text-xs text-destructive">
+            {{ searchError }}
+            <span v-if="usdaMissing">Scegli "Prodotti confezionati" o crea un alimento.</span>
+          </p>
 
           <div v-if="filteredFavorites.length" class="space-y-2">
             <div
@@ -673,11 +712,11 @@ const gramsInputClass =
 
         <section
           v-if="query.trim().length >= 3"
-          data-testid="off-group"
+          :data-testid="source === 'off' ? 'off-group' : 'usda-group'"
           class="space-y-2"
         >
           <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Prodotti confezionati
+            {{ source === 'off' ? 'Prodotti confezionati' : 'Alimenti semplici' }}
           </p>
 
           <p v-if="searching" class="text-xs text-muted-foreground">Ricerca…</p>
@@ -687,15 +726,16 @@ const gramsInputClass =
               v-for="food in searchResults"
               :key="food.id"
               type="button"
-              data-testid="off-result"
+              :data-testid="source === 'off' ? 'off-result' : 'usda-result'"
               :disabled="addingCode !== null"
               class="flex w-full items-center justify-between rounded-xl border border-border bg-card px-3 py-2.5 text-left disabled:opacity-60"
-              @click="addProduct(food)"
+              @click="addResult(food)"
             >
               <span class="min-w-0">
                 <span class="block truncate text-sm">{{ food.name }}</span>
                 <span class="block text-xs text-muted-foreground">
-                  {{ food.brand ? `${food.brand} · ` : '' }}{{ formatKcal(food.per100g.kcal) }} kcal/100 g · Open Food Facts
+                  {{ food.brand ? `${food.brand} · ` : '' }}{{ formatKcal(food.per100g.kcal) }} kcal/100 g ·
+                  {{ source === 'off' ? 'Open Food Facts' : 'USDA' }}
                 </span>
               </span>
               <Plus class="size-4 text-muted-foreground" aria-hidden="true" />
@@ -706,10 +746,8 @@ const gramsInputClass =
             v-else-if="searchedTerm"
             class="rounded-xl border border-dashed border-border p-4 text-center text-xs text-muted-foreground"
           >
-            Nessun prodotto trovato.
+            {{ source === 'off' ? 'Nessun prodotto trovato.' : 'Nessun alimento trovato.' }}
           </p>
-
-          <p v-if="searchError" role="alert" class="text-xs text-destructive">{{ searchError }}</p>
         </section>
 
         <section v-if="creating" class="space-y-3 rounded-xl border border-border bg-card p-3">

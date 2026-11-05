@@ -1,5 +1,6 @@
 import type { FoodSearchResponse, ItemNutrition, SearchFood } from '../lib/diary'
 import type { Env } from './env'
+import { searchUsdaFoods } from './usda'
 
 const SEARCH_URL = 'https://search.openfoodfacts.org/search'
 const PRODUCT_URL = 'https://world.openfoodfacts.org/api'
@@ -193,10 +194,18 @@ async function fetchJson(url: string, env: Env): Promise<{ response: Response; b
 }
 
 export async function searchFoods(request: Request, env: Env): Promise<Response> {
-  const q = (new URL(request.url).searchParams.get('q') ?? '').trim()
+  const params = new URL(request.url).searchParams
+  const q = (params.get('q') ?? '').trim()
+  const source = params.get('source') ?? 'off'
+
   if (q.length < MIN_QUERY_LENGTH) {
     const empty: FoodSearchResponse = { off: [], usda: [] }
     return Response.json(empty)
+  }
+
+  if (source === 'usda') return searchUsdaFoods(q, env)
+  if (source !== 'off') {
+    return Response.json({ error: 'Fonte di ricerca non valida.' }, { status: 400 })
   }
 
   const key = `off:search:${q.toLowerCase()}`
