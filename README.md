@@ -71,7 +71,15 @@ npm run types               # rigenera worker-configuration.d.ts dopo modifiche 
 API disponibili:
 
 - `GET /api/health` → `{ "ok": true }` (pubblica)
-- `GET /api/meals` → ultimi 50 pasti non cancellati (richiede `Authorization: Bearer <token>`)
+- `GET/PUT /api/profile` → profilo e target kcal
+- `GET /api/days/:date` → pasti, voci e totali del giorno
+- `POST /api/meals`, `PUT/DELETE /api/meals/:id` → crea, sostituisce, cancella un pasto
+- `GET/POST /api/foods`, `PATCH/DELETE /api/foods/:id` → preferiti
+- `GET /api/foods/search?q=` → ricerca su Open Food Facts (gruppo `off`)
+- `GET /api/foods/off/:code` → prodotto per codice a barre
+- `GET /api/export?from=&to=` → dati JSON per l'export `.xlsx`
+
+Tutte richiedono `Authorization: Bearer <token>` tranne `/api/health`. Il token statico `API_TOKEN` viene risolto all'utente con email `ALLOWED_EMAIL`: perché funzioni, quell'utente deve aver fatto almeno un login Google (altrimenti 403).
 
 ## Autenticazione API
 

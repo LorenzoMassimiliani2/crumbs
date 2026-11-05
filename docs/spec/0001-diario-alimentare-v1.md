@@ -147,17 +147,23 @@ users          id (= sub Google), email, name, picture, created_at
 profiles       user_id, height_cm, sex, birth_date, weight_kg, weight_updated_at,
                target_kcal, updated_at
 foods          id, user_id, name, brand, barcode, source, source_id,
-               kcal_100g, protein_100g, carbs_100g, fat_100g, fiber_100g, sugar_100g, salt_100g,
+               kcal_100g (obbligatoria), protein_100g, carbs_100g, fat_100g,
+               fiber_100g, sugar_100g, salt_100g (nullable: ignoto ≠ 0),
                serving_g, serving_label, last_used_at, created_at, updated_at
 meals          id, user_id, occurred_at (UTC), local_date, meal_type, note,
                created_at, updated_at, deleted_at
-meal_items     id, meal_id, food_id (nullable), name_snapshot,
-               kcal_100g, protein_100g, carbs_100g, fat_100g, fiber_100g, sugar_100g, salt_100g,
+meal_items     id, meal_id, food_id (nullable), name_snapshot, source, brand, source_id,
+               kcal_100g (obbligatoria), protein_100g, carbs_100g, fat_100g,
+               fiber_100g, sugar_100g, salt_100g (nullable: ignoto ≠ 0),
                grams, position
 api_cache      key, source, payload, fetched_at
 ```
 
-Unicità: `foods` su `(user_id, source, source_id)` quando `source_id` non è nullo, altrimenti su `(user_id, nome normalizzato)`. `meal_items.food_id` diventa `NULL` alla cancellazione del preferito; i valori restano nello snapshot.
+Unicità: `foods` su `(user_id, source, source_id)` quando `source_id` non è nullo, altrimenti su `(user_id, nome normalizzato)`. `meal_items.food_id` diventa `NULL` alla cancellazione del preferito; valori nutrizionali, `source`, `brand` e `source_id` restano nello snapshot, così la voce resta leggibile.
+
+Un nutriente non disponibile nella fonte è `NULL`, mai `0`: uno zero è valido solo se la fonte lo dichiara. I totali trattano `NULL` come zero.
+
+Il token statico di servizio non ha identità Google: viene risolto all'utente con email `ALLOWED_EMAIL`; se la riga non esiste, le rotte rispondono 403 e serve un primo login Google.
 
 ### Rotte API
 
@@ -174,8 +180,10 @@ Unicità: `foods` su `(user_id, source, source_id)` quando `source_id` non è nu
 | POST | `/api/foods` | alimento manuale |
 | PATCH/DELETE | `/api/foods/:id` | modifica o elimina preferito |
 | GET | `/api/foods/search?q=` | ricerca esterna raggruppata |
+| GET | `/api/foods/off/:code` | prodotto Open Food Facts normalizzato |
+| GET | `/api/export?from=&to=` | righe voci e totali giornalieri per l'export |
 
-L'export non ha una rotta: è generato lato client.
+Il file `.xlsx` è generato lato client; il Worker espone solo i dati JSON dell'intervallo.
 
 ### Costanti e configurazione
 
@@ -187,7 +195,7 @@ L'export non ha una rotta: è generato lato client.
 
 ## Seams
 
-- **Seam più alto (primario):** handler HTTP del Worker (`fetch`) invocato con `Request` reali e D1 reale, in workerd con `@cloudflare/vitest-pool-workers` e una migrazione applicata al DB di test. Le API esterne (Open Food Facts, USDA) sono mockate solo al confine di rete (`fetchMock`), con fixture registrate. Le asserzioni leggono le risposte HTTP e le righe restituite dalle stesse rotte, mai lo stato interno.
+- **Seam più alto (primario):** handler HTTP del Worker (`fetch`) invocato con `Request` reali e D1 reale, con le migrazioni applicate al DB di test. Implementato con il fallback SQLite in memoria dietro l'interfaccia `D1Database`, perché `@cloudflare/vitest-pool-workers` non supporta la versione di Vitest installata. Le API esterne (Open Food Facts, USDA) sono mockate solo al confine di rete (`fetchMock`), con fixture registrate. Le asserzioni leggono le risposte HTTP e le righe restituite dalle stesse rotte, mai lo stato interno.
 - **Seam frontend (nuovo):** test a livello di vista con Vue Test Utils e happy-dom, con la rete mockata al confine (`fetch`/`apiFetch`): coprono il flusso aggiunta pasto, il riepilogo del giorno e il salvataggio del profilo. Nessuna asserzione su componenti interni o store.
 - **Seam invariati:** `verifyGoogleIdToken` e la gestione della credenziale restano testati come oggi. Nessun nuovo seam interno per repository o adapter: la logica passa dalle rotte HTTP.
 - **Fallback tecnico:** se `@cloudflare/vitest-pool-workers` non è compatibile con la versione di Vitest installata, lo stesso seam HTTP viene testato con D1 SQLite in memoria dietro l'interfaccia `D1Database`, senza cambiare i test.
