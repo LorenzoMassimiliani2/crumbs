@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { KeyRound, LoaderCircle, LogIn } from '@lucide/vue'
-import { onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -166,9 +166,36 @@ async function submitToken(): Promise<void> {
   }
 }
 
+let revalidating = false
+
+async function revalidate(): Promise<void> {
+  if (!authenticated.value || revalidating) return
+
+  revalidating = true
+  try {
+    await refreshIdentity()
+  } catch {
+    // Una rivalidazione fallita per rete non chiude la sessione.
+  } finally {
+    revalidating = false
+  }
+}
+
+function onVisibilityChange(): void {
+  if (document.visibilityState === 'visible') void revalidate()
+}
+
 onMounted(async () => {
+  window.addEventListener('focus', revalidate)
+  document.addEventListener('visibilitychange', onVisibilityChange)
+
   await initialCheck()
   if (!authenticated.value && googleClientId) void initGoogle().catch(() => undefined)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('focus', revalidate)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
 })
 </script>
 

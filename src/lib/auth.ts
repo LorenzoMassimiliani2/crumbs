@@ -94,9 +94,13 @@ export function clearCredential(): void {
   localStorage.removeItem(LEGACY_TOKEN_KEY)
 }
 
-export function signOut(message = ''): void {
+export function endSession(message = ''): void {
   clearCredential()
   authMessage.value = message
+}
+
+export function signOut(message = ''): void {
+  endSession(message)
   window.google?.accounts?.id?.disableAutoSelect()
 }
 
