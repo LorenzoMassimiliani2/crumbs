@@ -26,6 +26,10 @@ Comportamento richiesto:
 - Nuova rotta `GET /api/me` che, con credenziale valida, restituisce identità dell'utente (`email`, `name`, `picture`) e il tipo di credenziale usato.
 - Configurazione: `GOOGLE_CLIENT_ID` come variabile del Worker, `ALLOWED_EMAIL` come secret. Se mancano, ogni credenziale Google è rifiutata e il token statico resta l'unico accesso valido.
 
+Prefactor incluso in questo ticket:
+- introdurre Vitest (devDependency, script `npm test`, ambiente node) per testare la verifica senza rete;
+- nessun altro tooling di test o lint.
+
 Fuori scope:
 - UI di login (ticket successivo);
 - persistenza di utenti o sessioni in D1;
@@ -40,6 +44,7 @@ Fuori scope:
 - [ ] `kid` sconosciuto provoca un solo refetch delle chiavi e poi la verifica.
 - [ ] `/api/health` resta accessibile senza credenziale.
 - [ ] Test automatici della verifica (firma, claim, rotazione `kid`, allowlist) senza dipendere dalla rete.
+- [ ] `npm test` esegue la suite Vitest e passa.
 
 ## Choices
 - decisione: mantenere il token statico come credenziale di servizio.

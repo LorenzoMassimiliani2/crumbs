@@ -75,12 +75,28 @@ API disponibili:
 
 ## Autenticazione API
 
-Tutte le rotte `/api/*` tranne `/api/health` richiedono il token nel secret `API_TOKEN`.
+Tutte le rotte `/api/*` tranne `/api/health` richiedono una credenziale `Authorization: Bearer`.
 
-- Produzione: `npm run secret:api-token` (oppure `npx wrangler secret put API_TOKEN`).
-- Sviluppo locale: `API_TOKEN="..."` in `.dev.vars` (git-ignored).
-- Nell'app il token viene chiesto al primo accesso e salvato in `localStorage`; su `401` viene cancellato e la schermata di accesso ricompare.
-- Per ruotare il token: `npm run secret:api-token` e reinserirlo nell'app.
+Credenziali accettate:
+
+1. **ID token Google** (login utente), verificato nel Worker: firma RS256 contro le chiavi pubbliche Google, `iss`, `aud`, scadenza, `email_verified` e allowlist.
+2. **Token statico** `API_TOKEN`, come accesso di servizio per script e curl.
+
+Configurazione:
+
+- `GOOGLE_CLIENT_ID`: variabile pubblica in `wrangler.jsonc` (vuota finché il client OAuth non è creato; con valore vuoto il login Google è disabilitato).
+- `ALLOWED_EMAIL`: secret con l'unica email autorizzata (`npx wrangler secret put ALLOWED_EMAIL`).
+- `API_TOKEN`: secret (`npm run secret:api-token`).
+- Sviluppo locale: stessi valori in `.dev.vars` (git-ignored).
+
+`GET /api/me` restituisce la credenziale usata e, per Google, email, nome e immagine.
+
+## Test
+
+```bash
+npm test            # Vitest, ambiente node, nessuna rete
+npm run test:watch
+```
 
 Le rotte `/api/*` sono gestite dal Worker (`assets.run_worker_first`); il resto è servito come asset statico.
 

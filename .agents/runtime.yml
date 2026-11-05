@@ -19,3 +19,7 @@ db-migrate-remote:
   description: Applica le migrazioni D1 al database di produzione
   workdir: .
   command: npm run db:migrate:remote
+test:
+  description: Esegue la suite Vitest
+  workdir: .
+  command: npm test

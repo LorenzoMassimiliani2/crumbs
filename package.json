@@ -14,7 +14,9 @@
     "deploy:ci": "if [ \"$WORKERS_CI_BRANCH\" = \"main\" ]; then npx wrangler d1 migrations apply crumbs-db --remote; fi && npx wrangler deploy",
     "secret:api-token": "wrangler secret put API_TOKEN",
     "dev:api": "npm run build && wrangler dev",
-    "dev:all": "concurrently -k -n api,web -c yellow,cyan \"npm:dev:api\" \"npm:dev\""
+    "dev:all": "concurrently -k -n api,web -c yellow,cyan \"npm:dev:api\" \"npm:dev\"",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@lucide/vue": "^1.69.0",
@@ -37,6 +39,7 @@
     "typescript": "~6.0.3",
     "vite": "^8.3.6",
     "vite-plugin-pwa": "^2.0.0",
+    "vitest": "^5.1.0",
     "vue-tsc": "^3.3.14",
     "wrangler": "^4.157.0"
   },
