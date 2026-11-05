@@ -50,7 +50,7 @@ Implementare la SPEC-0001 con TDD, ticket per ticket, commit per ticket su branc
 - [x] Contract concordato
 - [x] Piano copiato su `orchestrator/integrate`
 - [x] 0006 seam di test (merge 8e37da7)
-- [ ] 0007 schema + profilo
+- [x] 0007 schema + profilo (merge)
 - [ ] 0008 pasti + giorno
 - [ ] 0009 preferiti
 - [ ] 0010 ricerca OFF
