@@ -13,12 +13,18 @@ Diario alimentare come PWA. Scheletro applicativo: nessuna logica di business.
 
 ## Sviluppo
 
-Servono due processi: Vite per il frontend (HMR) e `wrangler dev` per Worker e D1 locale.
+Un solo comando avvia tutto: Vite con HMR sul frontend, Worker con D1 locale e proxy `/api`.
 
 ```bash
 npm install
-npx wrangler dev      # API e DB locali su http://localhost:8787
-npm run dev           # frontend su http://localhost:5173, con proxy /api -> 8787
+npm run dev:all       # frontend http://localhost:5173 + API http://localhost:8787
+```
+
+In alternativa, due terminali:
+
+```bash
+npm run dev:api       # build iniziale + wrangler dev su :8787
+npm run dev           # Vite su :5173, con proxy /api -> :8787
 ```
 
 Il proxy è configurato solo per lo sviluppo: in produzione Worker e asset stanno sullo stesso hostname.
