@@ -244,6 +244,15 @@ onMounted(load)
           class="underline"
         >Open Food Facts (ODbL)</a>
       </p>
+      <p class="mt-1 text-xs text-muted-foreground">
+        Fonte alimenti semplici:
+        <a
+          href="https://fdc.nal.usda.gov"
+          target="_blank"
+          rel="noreferrer"
+          class="underline"
+        >USDA FoodData Central (CC0)</a>
+      </p>
     </CardContent>
   </Card>
 

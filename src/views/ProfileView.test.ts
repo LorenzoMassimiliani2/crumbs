@@ -88,6 +88,17 @@ describe('ProfileView', () => {
     expect(wrapper.text()).toContain('ODbL')
     expect(wrapper.text()).toContain('Dati da')
   })
+
+  it('shows the USDA attribution', async () => {
+    fetchStub().intercept(/\/api\/profile$/, () => Response.json(EMPTY_PROFILE))
+
+    const wrapper = mount(ProfileView)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Fonte alimenti semplici:')
+    const link = wrapper.get('a[href="https://fdc.nal.usda.gov"]')
+    expect(link.text()).toContain('USDA FoodData Central (CC0)')
+  })
 })
 
 describe('ProfileView export', () => {
