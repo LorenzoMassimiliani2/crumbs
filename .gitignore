@@ -9,6 +9,8 @@ lerna-debug.log*
 
 node_modules
 .wrangler
+.dev.vars
+.dev.vars.*
 dist
 dist-ssr
 *.local

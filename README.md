@@ -59,8 +59,17 @@ npm run types               # rigenera worker-configuration.d.ts dopo modifiche 
 
 API disponibili:
 
-- `GET /api/health` → `{ "ok": true }`
-- `GET /api/meals` → ultimi 50 pasti non cancellati
+- `GET /api/health` → `{ "ok": true }` (pubblica)
+- `GET /api/meals` → ultimi 50 pasti non cancellati (richiede `Authorization: Bearer <token>`)
+
+## Autenticazione API
+
+Tutte le rotte `/api/*` tranne `/api/health` richiedono il token nel secret `API_TOKEN`.
+
+- Produzione: `npm run secret:api-token` (oppure `npx wrangler secret put API_TOKEN`).
+- Sviluppo locale: `API_TOKEN="..."` in `.dev.vars` (git-ignored).
+- Nell'app il token viene chiesto al primo accesso e salvato in `localStorage`; su `401` viene cancellato e la schermata di accesso ricompare.
+- Per ruotare il token: `npm run secret:api-token` e reinserirlo nell'app.
 
 Le rotte `/api/*` sono gestite dal Worker (`assets.run_worker_first`); il resto è servito come asset statico.
 

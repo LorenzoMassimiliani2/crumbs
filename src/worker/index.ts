@@ -1,9 +1,26 @@
+import type { Env } from './env'
+
+function unauthorized(): Response {
+  return Response.json(
+    { error: 'unauthorized' },
+    { status: 401, headers: { 'www-authenticate': 'Bearer' } },
+  )
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const { pathname } = new URL(request.url)
 
-    if (request.method === 'GET' && pathname === '/api/health') {
+    if (pathname === '/api/health') {
       return Response.json({ ok: true })
+    }
+
+    if (pathname.startsWith('/api/')) {
+      const header = request.headers.get('authorization') ?? ''
+      const token = header.startsWith('Bearer ') ? header.slice(7) : ''
+      if (!env.API_TOKEN || token !== env.API_TOKEN) {
+        return unauthorized()
+      }
     }
 
     if (request.method === 'GET' && pathname === '/api/meals') {
