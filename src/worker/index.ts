@@ -1,6 +1,7 @@
 import { verifyGoogleIdToken, type GoogleClaims } from './auth'
 import type { Env } from './env'
 import { createMeal, deleteMeal, getDay, listFoods, updateMeal } from './meals'
+import { getOffProduct, searchFoods } from './off'
 import { parseProfile, profileFromRow } from './profile'
 
 type AuthContext = { kind: 'service' } | { kind: 'google'; claims: GoogleClaims }
@@ -167,6 +168,16 @@ const routes: ApiRoute[] = [
     method: 'GET',
     pattern: /^\/api\/foods$/,
     handler: (_request, env, userId) => listFoods(env, userId),
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/foods\/search$/,
+    handler: (request, env) => searchFoods(request, env),
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/foods\/off\/([^/]+)$/,
+    handler: (_request, env, _userId, [code]) => getOffProduct(env, code!),
   },
 ]
 

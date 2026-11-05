@@ -208,6 +208,16 @@ onMounted(load)
           <p v-if="error" role="alert" class="text-sm text-destructive">{{ error }}</p>
         </div>
       </form>
+
+      <p class="mt-4 text-xs text-muted-foreground">
+        Dati da
+        <a
+          href="https://world.openfoodfacts.org"
+          target="_blank"
+          rel="noreferrer"
+          class="underline"
+        >Open Food Facts (ODbL)</a>
+      </p>
     </CardContent>
   </Card>
 </template>

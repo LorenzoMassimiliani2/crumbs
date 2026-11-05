@@ -1,0 +1,143 @@
+import { flushPromises, mount } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { fetchStub } from '@/test/fetch'
+import HomeView from './HomeView.vue'
+
+const EMPTY_DAY = {
+  date: '2026-11-05',
+  targetKcal: 2200,
+  totals: { kcal: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0, salt: 0 },
+  meals: [],
+}
+
+const PANE_PER_100G = {
+  kcal: 260,
+  protein: 14,
+  carbs: 37,
+  fat: 4.8,
+  fiber: 6.5,
+  sugar: 4.9,
+  salt: 0.99,
+}
+
+const PANE = {
+  id: '8003170101142',
+  name: 'PANE PROTEICO',
+  brand: 'Piacersi Conad',
+  barcode: '8003170101142',
+  source: 'off',
+  sourceId: '8003170101142',
+  per100g: PANE_PER_100G,
+  serving: { grams: 23.5, label: '23.5g' },
+}
+
+const SEARCH_BODY = { off: [PANE], usda: [] }
+
+function stubApp(): void {
+  fetchStub().intercept(/\/api\/days\//, () => Response.json(EMPTY_DAY))
+  fetchStub().intercept(/\/api\/foods$/, () => Response.json([]))
+  fetchStub().intercept(/\/api\/meals$/, () => Response.json({ id: 'meal-1' }, { status: 201 }))
+  fetchStub().intercept(/\/api\/foods\/search/, () => Response.json(SEARCH_BODY))
+  fetchStub().intercept(/\/api\/foods\/off\//, () => Response.json(PANE))
+}
+
+function searchRequests(): Request[] {
+  return fetchStub().requests.filter((request) => request.url.includes('/api/foods/search'))
+}
+
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+  vi.setSystemTime(new Date(2026, 10, 5, 12, 0, 0))
+})
+
+afterEach(() => {
+  vi.useRealTimers()
+})
+
+async function openFlow() {
+  const wrapper = mount(HomeView)
+  await flushPromises()
+  await wrapper.get('[data-testid="add-meal"]').trigger('click')
+  await flushPromises()
+  return wrapper
+}
+
+describe('external food search in the add-meal flow', () => {
+  it('does not search with fewer than 3 characters, even after the pause', async () => {
+    stubApp()
+    const wrapper = await openFlow()
+
+    await wrapper.get('input[aria-label="Cerca nei preferiti"]').setValue('pa')
+    await vi.advanceTimersByTimeAsync(2000)
+    await flushPromises()
+
+    expect(searchRequests()).toHaveLength(0)
+    expect(wrapper.text()).not.toContain('Prodotti confezionati')
+  })
+
+  it('searches after a pause and shows the packaged-products group', async () => {
+    stubApp()
+    const wrapper = await openFlow()
+
+    await wrapper.get('input[aria-label="Cerca nei preferiti"]').setValue('pane')
+    expect(searchRequests()).toHaveLength(0)
+
+    await vi.advanceTimersByTimeAsync(600)
+    await flushPromises()
+
+    expect(searchRequests()).toHaveLength(1)
+    expect(searchRequests()[0]!.url).toContain('q=pane')
+
+    const group = wrapper.get('[data-testid="off-group"]')
+    expect(group.text()).toContain('Prodotti confezionati')
+    expect(group.text()).toContain('PANE PROTEICO')
+    expect(group.text()).toContain('Piacersi Conad')
+    expect(group.text()).toContain('260')
+    expect(group.text()).toContain('Open Food Facts')
+  })
+
+  it('searches immediately on submit', async () => {
+    stubApp()
+    const wrapper = await openFlow()
+
+    const input = wrapper.get('input[aria-label="Cerca nei preferiti"]')
+    await input.setValue('pane')
+    await input.trigger('keydown.enter')
+    await flushPromises()
+
+    expect(searchRequests()).toHaveLength(1)
+  })
+
+  it('adds the current product data to the draft and saves it as an Open Food Facts item', async () => {
+    stubApp()
+    const wrapper = await openFlow()
+
+    await wrapper.get('input[aria-label="Cerca nei preferiti"]').setValue('pane')
+    await vi.advanceTimersByTimeAsync(600)
+    await flushPromises()
+
+    await wrapper.get('[data-testid="off-result"]').trigger('click')
+    await flushPromises()
+
+    expect(
+      fetchStub().requests.some((request) => request.url.endsWith('/api/foods/off/8003170101142')),
+    ).toBe(true)
+    expect(wrapper.text()).toContain('1 alimento')
+    expect(wrapper.get('[data-testid="draft-total"]').text()).toContain('260')
+
+    await wrapper.get('[data-testid="save-meal"]').trigger('click')
+    await flushPromises()
+
+    const post = fetchStub().requests.find((request) => request.method === 'POST')!
+    const body = (await post.json()) as { items: Record<string, unknown>[] }
+    expect(body.items[0]).toMatchObject({
+      name: 'PANE PROTEICO',
+      source: 'off',
+      sourceId: '8003170101142',
+      brand: 'Piacersi Conad',
+      grams: 100,
+      per100g: PANE_PER_100G,
+    })
+  })
+})

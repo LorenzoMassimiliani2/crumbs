@@ -22,6 +22,33 @@ export interface Food {
   lastUsedAt: string | null
 }
 
+/** A nutrient value can be absent at the source; absent is null, never 0. */
+export interface NutrientValues {
+  kcal: number
+  protein: number | null
+  carbs: number | null
+  fat: number | null
+  fiber: number | null
+  sugar: number | null
+  salt: number | null
+}
+
+export interface SearchFood {
+  id: string
+  name: string
+  brand: string | null
+  barcode: string | null
+  source: FoodSource
+  sourceId: string | null
+  per100g: NutrientValues
+  serving: { grams: number; label: string } | null
+}
+
+export interface FoodSearchResponse {
+  off: SearchFood[]
+  usda: SearchFood[]
+}
+
 export interface DayItem {
   id: string
   name: string

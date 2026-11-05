@@ -70,4 +70,16 @@ describe('ProfileView', () => {
     expect(await put!.json()).toEqual(SAVED_PROFILE)
     expect(wrapper.text()).toContain('Salvato')
   })
+
+  it('shows the Open Food Facts attribution with a link', async () => {
+    fetchStub().intercept(/\/api\/profile$/, () => Response.json(EMPTY_PROFILE))
+
+    const wrapper = mount(ProfileView)
+    await flushPromises()
+
+    const link = wrapper.get('a[href="https://world.openfoodfacts.org"]')
+    expect(link.text()).toContain('Open Food Facts')
+    expect(wrapper.text()).toContain('ODbL')
+    expect(wrapper.text()).toContain('Dati da')
+  })
 })

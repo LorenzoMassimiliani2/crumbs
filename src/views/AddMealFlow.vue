@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Plus, Search, X } from '@lucide/vue'
-import { computed, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,7 +12,9 @@ import {
   sumTotals,
   type DayMeal,
   type Food,
+  type FoodSearchResponse,
   type FoodSource,
+  type SearchFood,
   type Totals,
 } from '@/lib/diary'
 import {
@@ -67,6 +69,14 @@ const creating = ref(false)
 const saving = ref(false)
 const error = ref('')
 const confirmingDelete = ref(false)
+const searchResults = ref<SearchFood[]>([])
+const searching = ref(false)
+const searchError = ref('')
+const addingCode = ref<string | null>(null)
+const searchedTerm = ref('')
+
+const SEARCH_PAUSE_MS = 600
+let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 const manual = reactive({
   name: '',
@@ -106,6 +116,109 @@ function addFavorite(food: Food): void {
   })
   query.value = ''
 }
+
+function clearSearchTimer(): void {
+  if (searchTimer !== null) {
+    clearTimeout(searchTimer)
+    searchTimer = null
+  }
+}
+
+function resetSearch(): void {
+  clearSearchTimer()
+  searchResults.value = []
+  searchError.value = ''
+  searchedTerm.value = ''
+  searching.value = false
+}
+
+function scheduleSearch(): void {
+  clearSearchTimer()
+  const term = query.value.trim()
+  if (term.length < 3) {
+    resetSearch()
+    return
+  }
+  searchTimer = setTimeout(() => {
+    void runSearch()
+  }, SEARCH_PAUSE_MS)
+}
+
+async function runSearch(): Promise<void> {
+  clearSearchTimer()
+  const term = query.value.trim()
+  if (term.length < 3) return
+
+  searching.value = true
+  searchError.value = ''
+  searchedTerm.value = term
+
+  try {
+    const response = await apiFetch(`/api/foods/search?q=${encodeURIComponent(term)}`)
+    if (query.value.trim() !== term) return
+    if (!response.ok) {
+      const body = (await response.json().catch(() => null)) as { error?: string } | null
+      searchResults.value = []
+      searchError.value = body?.error ?? 'Ricerca non riuscita. Riprova.'
+      return
+    }
+    const body = (await response.json()) as FoodSearchResponse
+    searchResults.value = body.off ?? []
+  } catch {
+    if (query.value.trim() === term) {
+      searchResults.value = []
+      searchError.value = 'Impossibile contattare il server.'
+    }
+  } finally {
+    searching.value = false
+  }
+}
+
+function addSearchFood(food: SearchFood): void {
+  draft.value.push({
+    key: nextKey++,
+    name: food.name,
+    source: food.source,
+    sourceId: food.sourceId,
+    brand: food.brand,
+    per100g: {
+      kcal: food.per100g.kcal,
+      protein: food.per100g.protein ?? 0,
+      carbs: food.per100g.carbs ?? 0,
+      fat: food.per100g.fat ?? 0,
+      fiber: food.per100g.fiber ?? 0,
+      sugar: food.per100g.sugar ?? 0,
+      salt: food.per100g.salt ?? 0,
+    },
+    grams: 100,
+  })
+  query.value = ''
+  resetSearch()
+}
+
+async function addProduct(food: SearchFood): Promise<void> {
+  if (addingCode.value !== null) return
+  const code = food.sourceId ?? food.id
+  addingCode.value = code
+  searchError.value = ''
+
+  try {
+    const response = await apiFetch(`/api/foods/off/${encodeURIComponent(code)}`)
+    if (!response.ok) {
+      const body = (await response.json().catch(() => null)) as { error?: string } | null
+      searchError.value = body?.error ?? 'Prodotto non disponibile. Riprova.'
+      return
+    }
+    addSearchFood((await response.json()) as SearchFood)
+  } catch {
+    searchError.value = 'Impossibile contattare il server.'
+  } finally {
+    addingCode.value = null
+  }
+}
+
+watch(query, scheduleSearch)
+onBeforeUnmount(clearSearchTimer)
 
 function setGrams(item: DraftItem, event: Event): void {
   item.grams = Number((event.target as HTMLInputElement).value)
@@ -296,6 +409,7 @@ const gramsInputClass =
               aria-label="Cerca nei preferiti"
               placeholder="Cerca un alimento"
               class="pl-9"
+              @keydown.enter.prevent="runSearch"
             />
           </div>
 
@@ -331,6 +445,47 @@ const gramsInputClass =
           >
             Crea alimento
           </Button>
+        </section>
+
+        <section
+          v-if="query.trim().length >= 3"
+          data-testid="off-group"
+          class="space-y-2"
+        >
+          <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Prodotti confezionati
+          </p>
+
+          <p v-if="searching" class="text-xs text-muted-foreground">Ricerca…</p>
+
+          <div v-else-if="searchResults.length" class="space-y-2">
+            <button
+              v-for="food in searchResults"
+              :key="food.id"
+              type="button"
+              data-testid="off-result"
+              :disabled="addingCode !== null"
+              class="flex w-full items-center justify-between rounded-xl border border-border bg-card px-3 py-2.5 text-left disabled:opacity-60"
+              @click="addProduct(food)"
+            >
+              <span class="min-w-0">
+                <span class="block truncate text-sm">{{ food.name }}</span>
+                <span class="block text-xs text-muted-foreground">
+                  {{ food.brand ? `${food.brand} · ` : '' }}{{ formatKcal(food.per100g.kcal) }} kcal/100 g · Open Food Facts
+                </span>
+              </span>
+              <Plus class="size-4 text-muted-foreground" aria-hidden="true" />
+            </button>
+          </div>
+
+          <p
+            v-else-if="searchedTerm"
+            class="rounded-xl border border-dashed border-border p-4 text-center text-xs text-muted-foreground"
+          >
+            Nessun prodotto trovato.
+          </p>
+
+          <p v-if="searchError" role="alert" class="text-xs text-destructive">{{ searchError }}</p>
         </section>
 
         <section v-if="creating" class="space-y-3 rounded-xl border border-border bg-card p-3">
