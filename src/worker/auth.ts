@@ -43,15 +43,33 @@ function decodeJson(value: string): unknown {
   return JSON.parse(decoder.decode(decodeBase64Url(value)))
 }
 
+const JWKS_CACHE_NAME = 'google-jwks'
+const JWKS_CACHE_KEY = 'https://crumbs.internal/google-jwks'
+const JWKS_CACHE_SECONDS = 3600
+
 export async function loadGoogleJwks(force = false): Promise<GoogleJwks> {
-  const url = force ? `${JWKS_URL}?ts=${Date.now()}` : JWKS_URL
-  const response = await fetch(url, {
-    cf: { cacheTtl: 3600, cacheEverything: true },
-  } as RequestInit)
+  const cache = await caches.open(JWKS_CACHE_NAME)
+  if (!force) {
+    const cached = await cache.match(JWKS_CACHE_KEY)
+    if (cached) return (await cached.json()) as GoogleJwks
+  }
+
+  const response = await fetch(JWKS_URL)
   if (!response.ok) {
     throw new Error(`google jwks request failed: ${response.status}`)
   }
-  return (await response.json()) as GoogleJwks
+
+  const body = await response.text()
+  await cache.put(
+    JWKS_CACHE_KEY,
+    new Response(body, {
+      headers: {
+        'content-type': 'application/json',
+        'cache-control': `max-age=${JWKS_CACHE_SECONDS}`,
+      },
+    }),
+  )
+  return JSON.parse(body) as GoogleJwks
 }
 
 export async function verifyGoogleIdToken(
