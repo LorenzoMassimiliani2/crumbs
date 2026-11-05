@@ -32,7 +32,6 @@ Il service worker è disattivato in sviluppo; si attiva nel build di produzione.
 
 ```
 public/
-  _redirects              # SPA fallback per Cloudflare Pages
   favicon.svg
   icons/                  # icone PWA (192, 512, maskable, apple-touch)
 src/
