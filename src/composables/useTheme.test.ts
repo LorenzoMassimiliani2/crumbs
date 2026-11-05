@@ -45,4 +45,16 @@ describe('tema', () => {
     expect(document.documentElement.classList.contains('dark')).toBe(false)
     expect(localStorage.getItem('crumbs.theme')).toBe('light')
   })
+
+  it('aggiorna il theme-color del browser con il tema attivo', () => {
+    const meta = document.createElement('meta')
+    meta.setAttribute('name', 'theme-color')
+    document.head.appendChild(meta)
+
+    setTheme('dark')
+    expect(meta.getAttribute('content')).toBe('#0a0a0a')
+
+    setTheme('light')
+    expect(meta.getAttribute('content')).toBe('#ffffff')
+  })
 })
