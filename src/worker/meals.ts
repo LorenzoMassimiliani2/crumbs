@@ -250,15 +250,18 @@ function itemStatement(
 ): D1PreparedStatement {
   return env.DB.prepare(
     `INSERT INTO meal_items
-       (id, meal_id, food_id, name_snapshot,
+       (id, meal_id, food_id, name_snapshot, source, brand, source_id,
         kcal_100g, protein_100g, carbs_100g, fat_100g, fiber_100g, sugar_100g, salt_100g,
         grams, position)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).bind(
     itemId,
     mealId,
     favorite.id,
     item.name,
+    item.source,
+    item.brand,
+    item.sourceId,
     ...nutritionValues(item),
     item.grams,
     position,
@@ -325,6 +328,9 @@ interface ItemRow {
   id: string
   meal_id: string
   name_snapshot: string
+  source: string
+  brand: string | null
+  source_id: string | null
   grams: number
   kcal_100g: number
   protein_100g: number
@@ -333,9 +339,6 @@ interface ItemRow {
   fiber_100g: number
   sugar_100g: number
   salt_100g: number
-  food_source: string | null
-  food_brand: string | null
-  food_source_id: string | null
 }
 
 export async function getDay(env: Env, userId: string, date: string): Promise<Response> {
@@ -355,13 +358,11 @@ export async function getDay(env: Env, userId: string, date: string): Promise<Re
     .all<MealRow>()
 
   const itemRows = await env.DB.prepare(
-    `SELECT mi.id, mi.meal_id, mi.name_snapshot, mi.grams,
+    `SELECT mi.id, mi.meal_id, mi.name_snapshot, mi.source, mi.brand, mi.source_id, mi.grams,
             mi.kcal_100g, mi.protein_100g, mi.carbs_100g, mi.fat_100g,
-            mi.fiber_100g, mi.sugar_100g, mi.salt_100g,
-            f.source AS food_source, f.brand AS food_brand, f.source_id AS food_source_id
+            mi.fiber_100g, mi.sugar_100g, mi.salt_100g
      FROM meal_items mi
      JOIN meals m ON m.id = mi.meal_id
-     LEFT JOIN foods f ON f.id = mi.food_id AND f.user_id = m.user_id
      WHERE m.user_id = ? AND m.local_date = ? AND m.deleted_at IS NULL
      ORDER BY mi.position ASC`,
   )
@@ -383,9 +384,9 @@ export async function getDay(env: Env, userId: string, date: string): Promise<Re
     items.push({
       id: row.id,
       name: row.name_snapshot,
-      source: (row.food_source as FoodSource | null) ?? null,
-      brand: row.food_brand,
-      sourceId: row.food_source_id,
+      source: row.source as FoodSource,
+      brand: row.brand,
+      sourceId: row.source_id,
       grams: row.grams,
       per100g,
       totals: itemTotals(per100g, row.grams),

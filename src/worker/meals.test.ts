@@ -381,6 +381,29 @@ describe('favorites upsert', () => {
     expect(foods.results[0]!.name.trim().toLowerCase()).toBe('torta della nonna')
   })
 
+  it('keeps source and brand after the favorite is deleted', async () => {
+    const created = await call(env, 'POST', '/api/meals', mealBody())
+    expect(created.status).toBe(201)
+
+    await env.DB.prepare('DELETE FROM foods').run()
+    const item = await env.DB.prepare('SELECT food_id FROM meal_items').first<{
+      food_id: string | null
+    }>()
+    expect(item?.food_id).toBeNull()
+
+    const day = (await (await call(env, 'GET', '/api/days/2026-11-05')).json()) as {
+      meals: { items: Record<string, unknown>[] }[]
+    }
+    expect(day.meals[0]!.items[0]).toMatchObject({
+      name: 'Pane',
+      source: 'off',
+      brand: 'Forno',
+      sourceId: '123',
+      per100g: PANE_PER_100G,
+      totals: PANE_TOTALS,
+    })
+  })
+
   it('keeps the saved snapshot when the favorite changes', async () => {
     await call(env, 'POST', '/api/meals', mealBody())
     await env.DB.prepare('UPDATE foods SET kcal_100g = 999, protein_100g = 99').run()
