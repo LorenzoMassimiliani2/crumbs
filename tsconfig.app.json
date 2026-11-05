@@ -14,5 +14,6 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue", "worker-configuration.d.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue", "worker-configuration.d.ts"],
+  "exclude": ["src/**/*.test.ts", "src/test/**"]
 }
