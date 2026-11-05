@@ -1,20 +1,13 @@
-import * as XLSX from 'xlsx'
+import type { WorkBook } from 'xlsx'
 
-import { toLocalDateString, type FoodSource } from './diary'
+import { toLocalDateString, type FoodSource, type ItemNutrition } from './diary'
 import { MEAL_TYPE_LABELS, type MealType } from './meal-types'
 
-export interface ExportItem {
+export interface ExportItem extends ItemNutrition {
   date: string
   type: MealType
   name: string
   grams: number
-  kcal: number
-  protein: number
-  carbs: number
-  fat: number
-  fiber: number
-  sugar: number
-  salt: number
   source: FoodSource
 }
 
@@ -104,7 +97,9 @@ export function buildExportSheets(data: DiaryExport): { pasti: Cell[][]; giorni:
   return { pasti, giorni }
 }
 
-export function buildExportWorkbook(data: DiaryExport): XLSX.WorkBook {
+/** SheetJS is loaded only when a file is actually built, keeping it out of the initial bundle. */
+export async function buildExportWorkbook(data: DiaryExport): Promise<WorkBook> {
+  const XLSX = await import('xlsx')
   const sheets = buildExportSheets(data)
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(sheets.pasti), 'pasti')
@@ -112,8 +107,9 @@ export function buildExportWorkbook(data: DiaryExport): XLSX.WorkBook {
   return workbook
 }
 
-export function buildExportFile(data: DiaryExport): ArrayBuffer {
-  return XLSX.write(buildExportWorkbook(data), { bookType: 'xlsx', type: 'array' })
+export async function buildExportFile(data: DiaryExport): Promise<ArrayBuffer> {
+  const XLSX = await import('xlsx')
+  return XLSX.write(await buildExportWorkbook(data), { bookType: 'xlsx', type: 'array' })
 }
 
 export function exportFileName(from: string, to: string): string {
@@ -129,8 +125,8 @@ export function currentMonthRange(now: Date = new Date()): { from: string; to: s
   }
 }
 
-export function downloadExport(data: DiaryExport): void {
-  const bytes = buildExportFile(data)
+export async function downloadExport(data: DiaryExport): Promise<void> {
+  const bytes = await buildExportFile(data)
   const blob = new Blob([bytes], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   })

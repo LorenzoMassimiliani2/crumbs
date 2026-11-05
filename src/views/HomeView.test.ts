@@ -88,6 +88,50 @@ describe('HomeView', () => {
     expect(wrapper.text()).toContain('105 g')
   })
 
+  it('shows the readable source of every item', async () => {
+    const item = DAY.meals[0]!.items[0]!
+    const day = {
+      ...DAY,
+      meals: [
+        {
+          ...DAY.meals[0],
+          items: [
+            { ...item, id: 'item-off', name: 'Pane', source: 'off', brand: null },
+            { ...item, id: 'item-usda', name: 'Riso', source: 'usda', brand: null },
+            { ...item, id: 'item-manual', name: 'Torta', source: 'manual', brand: null },
+          ],
+        },
+      ],
+    }
+    stubDay(day)
+
+    const wrapper = mount(HomeView)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Open Food Facts')
+    expect(wrapper.text()).toContain('USDA')
+    expect(wrapper.text()).toContain('Manuale')
+  })
+
+  it('drops the previous day content when the new day fails to load', async () => {
+    fetchStub().intercept(/\/api\/days\//, (request) =>
+      request.url.endsWith('/2026-11-06')
+        ? Response.json({ error: 'Errore' }, { status: 500 })
+        : Response.json(DAY),
+    )
+    fetchStub().intercept(/\/api\/foods$/, () => Response.json(FAVORITES))
+
+    const wrapper = mount(HomeView)
+    await flushPromises()
+    expect(wrapper.text()).toContain('Pane integrale')
+
+    await wrapper.get('[aria-label="Giorno successivo"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('Pane integrale')
+    expect(wrapper.get('[role="alert"]').text()).toContain('Impossibile caricare il giorno')
+  })
+
   it('shows an empty state for a day without meals', async () => {
     stubDay(EMPTY_DAY)
 
@@ -206,6 +250,42 @@ describe('HomeView', () => {
       sourceId: null,
       grams: 100,
       per100g: { kcal: 400, protein: 5, carbs: 50, fat: 20, fiber: 2, sugar: 30, salt: 0.5 },
+    })
+  })
+
+  it('keeps unknown macros as null in the draft and shows a dash', async () => {
+    const mistero = {
+      ...FAVORITES[0]!,
+      id: 'food-mistero',
+      name: 'Mistero',
+      per100g: { kcal: 100, protein: null, carbs: null, fat: null, fiber: null, sugar: null, salt: null },
+    }
+    fetchStub().intercept(/\/api\/days\//, () => Response.json(DAY))
+    fetchStub().intercept(/\/api\/foods$/, () => Response.json([mistero]))
+    fetchStub().intercept(/\/api\/meals$/, () => Response.json(DAY.meals[0], { status: 201 }))
+
+    const wrapper = mount(HomeView)
+    await flushPromises()
+
+    await wrapper.get('[data-testid="add-meal"]').trigger('click')
+    const button = wrapper.findAll('button').find((item) => item.text().includes('Mistero'))!
+    await button.trigger('click')
+
+    expect(wrapper.text()).toContain('—')
+
+    await wrapper.get('[data-testid="save-meal"]').trigger('click')
+    await flushPromises()
+
+    const post = fetchStub().requests.find((request) => request.method === 'POST')!
+    const body = (await post.json()) as { items: { per100g: Record<string, unknown> }[] }
+    expect(body.items[0]!.per100g).toEqual({
+      kcal: 100,
+      protein: null,
+      carbs: null,
+      fat: null,
+      fiber: null,
+      sugar: null,
+      salt: null,
     })
   })
 

@@ -97,6 +97,36 @@ describe('buildExportSheets', () => {
     expect(sheets.giorni[1]).toEqual(['2026-11-05', 638, null, null, 18.6, 133, 2.65])
   })
 
+  it('leaves an unknown nutrient empty instead of writing zero', () => {
+    const sheets = buildExportSheets({
+      ...DATA,
+      items: [
+        {
+          ...DATA.items[0]!,
+          protein: null,
+          fiber: null,
+          sugar: null,
+          salt: null,
+        },
+      ],
+    })
+
+    expect(sheets.pasti[1]).toEqual([
+      '2026-11-05',
+      'Pranzo',
+      'Pane',
+      150,
+      534,
+      null,
+      105,
+      2.25,
+      null,
+      null,
+      null,
+      'Open Food Facts',
+    ])
+  })
+
   it('keeps only the headers for an empty range', () => {
     const sheets = buildExportSheets(EMPTY)
 
@@ -106,8 +136,8 @@ describe('buildExportSheets', () => {
 })
 
 describe('buildExportWorkbook', () => {
-  it('creates the two named sheets with the expected headers', () => {
-    const workbook = buildExportWorkbook(DATA)
+  it('creates the two named sheets with the expected headers', async () => {
+    const workbook = await buildExportWorkbook(DATA)
 
     expect(workbook.SheetNames).toEqual(['pasti', 'giorni'])
 
@@ -120,8 +150,8 @@ describe('buildExportWorkbook', () => {
     expect(giorni).toHaveLength(2)
   })
 
-  it('round-trips through an xlsx file reader', () => {
-    const bytes = buildExportFile(DATA)
+  it('round-trips through an xlsx file reader', async () => {
+    const bytes = await buildExportFile(DATA)
     expect(bytes.byteLength).toBeGreaterThan(0)
 
     const workbook = XLSX.read(bytes, { type: 'array' })
@@ -160,8 +190,8 @@ describe('buildExportWorkbook', () => {
     ])
   })
 
-  it('produces a readable file with only the headers for an empty range', () => {
-    const workbook = XLSX.read(buildExportFile(EMPTY), { type: 'array' })
+  it('produces a readable file with only the headers for an empty range', async () => {
+    const workbook = XLSX.read(await buildExportFile(EMPTY), { type: 'array' })
 
     expect(workbook.SheetNames).toEqual(['pasti', 'giorni'])
     expect(XLSX.utils.sheet_to_json(workbook.Sheets.pasti!, { header: 1 })).toEqual([PASTI_HEADERS])
