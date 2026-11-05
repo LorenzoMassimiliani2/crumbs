@@ -1,0 +1,21 @@
+# commands: comandi di progetto disponibili agli agenti.
+dev:
+  description: Avvia frontend Vite e Worker locale con D1
+  workdir: .
+  command: npm run dev:all
+build:
+  description: Type-check e build di produzione in dist/
+  workdir: .
+  command: npm run build
+type-check:
+  description: Solo controllo dei tipi
+  workdir: .
+  command: npm run type-check
+db-migrate-local:
+  description: Applica le migrazioni D1 al database locale
+  workdir: .
+  command: npm run db:migrate:local
+db-migrate-remote:
+  description: Applica le migrazioni D1 al database di produzione
+  workdir: .
+  command: npm run db:migrate:remote

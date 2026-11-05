@@ -1,0 +1,11 @@
+workflow:
+  routing:
+    default_tier: general
+safety:
+  readonly_paths:
+    - external/
+    - node_modules/
+tickets:
+  backend: github-source
+  github:
+    repo: LorenzoMassimiliani2/crumbs

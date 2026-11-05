@@ -1,0 +1,9 @@
+name: crumbs
+description: Diario alimentare come PWA su Cloudflare Workers
+language: TypeScript
+topology: standalone
+roles:
+  - application
+stack:
+  execution: [prime-agent]
+  governance: [meta agent, scripts, docs, adr]
