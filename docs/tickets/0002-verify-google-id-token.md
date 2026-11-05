@@ -1,7 +1,7 @@
 ---
 id: TICKET-0002
 title: Verificare l'ID token Google nel Worker
-status: ready-for-agent
+status: done
 category: enhancement
 blocked_by: []
 blocks: [TICKET-0003]
@@ -37,14 +37,14 @@ Fuori scope:
 - multi-utente.
 
 ## Acceptance criteria
-- [ ] Token statico valido continua a funzionare su `/api/meals`.
-- [ ] ID token valido per l'email autorizzata accede a `/api/meals` e `/api/me`.
-- [ ] ID token con email diversa, `aud` errata, firma non valida o scaduto riceve `401`.
-- [ ] Token assente riceve `401` con `WWW-Authenticate`.
-- [ ] `kid` sconosciuto provoca un solo refetch delle chiavi e poi la verifica.
-- [ ] `/api/health` resta accessibile senza credenziale.
-- [ ] Test automatici della verifica (firma, claim, rotazione `kid`, allowlist) senza dipendere dalla rete.
-- [ ] `npm test` esegue la suite Vitest e passa.
+- [x] Token statico valido continua a funzionare su `/api/meals`.
+- [x] ID token valido per l'email autorizzata accede a `/api/meals` e `/api/me`.
+- [x] ID token con email diversa, `aud` errata, firma non valida o scaduto riceve `401`.
+- [x] Token assente riceve `401` con `WWW-Authenticate`.
+- [x] `kid` sconosciuto provoca un solo refetch delle chiavi e poi la verifica.
+- [x] `/api/health` resta accessibile senza credenziale.
+- [x] Test automatici della verifica (firma, claim, rotazione `kid`, allowlist) senza dipendere dalla rete.
+- [x] `npm test` esegue la suite Vitest e passa.
 
 ## Choices
 - decisione: mantenere il token statico come credenziale di servizio.

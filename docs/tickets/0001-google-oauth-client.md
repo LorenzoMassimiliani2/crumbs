@@ -1,7 +1,7 @@
 ---
 id: TICKET-0001
 title: Configurare OAuth client Google per la PWA
-status: ready-for-human
+status: done
 category: enhancement
 blocked_by: []
 blocks: [TICKET-0003]
@@ -32,11 +32,11 @@ Fuori scope:
 - login per utenti diversi dal proprietario.
 
 ## Acceptance criteria
-- [ ] Client ID Web creato e disponibile.
-- [ ] Entrambe le origin autorizzate.
-- [ ] Consent screen in Testing con l'email del proprietario tra gli utenti di test.
-- [ ] Un tentativo di login da `http://localhost:5173` restituisce un `credential` JWT.
-- [ ] `GOOGLE_CLIENT_ID` e `ALLOWED_EMAIL` comunicati e impostati nel Worker.
+- [x] Client ID Web creato e disponibile.
+- [x] Entrambe le origin autorizzate.
+- [x] Consent screen in Testing con l'email del proprietario tra gli utenti di test.
+- [x] Un tentativo di login da `http://localhost:5173` restituisce un `credential` JWT.
+- [x] `GOOGLE_CLIENT_ID` e `ALLOWED_EMAIL` comunicati e impostati nel Worker.
 
 ## Choices
 - decisione: usare GIS con ID token invece del code flow OAuth.

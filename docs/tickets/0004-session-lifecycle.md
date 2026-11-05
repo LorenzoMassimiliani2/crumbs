@@ -1,7 +1,7 @@
 ---
 id: TICKET-0004
 title: Gestire scadenza, rinnovo e logout della sessione Google
-status: ready-for-agent
+status: done
 category: enhancement
 blocked_by: [TICKET-0003]
 blocks: []
@@ -26,12 +26,12 @@ Fuori scope:
 - notifiche push.
 
 ## Acceptance criteria
-- [ ] Token scaduto non genera chiamate API e porta alla schermata di accesso.
-- [ ] Un `401` in qualsiasi punto dell'app cancella il token e riporta al login.
-- [ ] Dopo il login si torna alla rotta da cui si era usciti.
-- [ ] "Esci" rimuove il token e impedisce il riuso automatico della sessione Google.
-- [ ] Tornando sull'app dopo un periodo di inattività la credenziale viene rivalidata una sola volta.
-- [ ] Nessun messaggio di errore espone il contenuto del token.
+- [x] Token scaduto non genera chiamate API e porta alla schermata di accesso.
+- [x] Un `401` in qualsiasi punto dell'app cancella il token e riporta al login.
+- [x] Dopo il login si torna alla rotta da cui si era usciti.
+- [x] "Esci" rimuove il token e impedisce il riuso automatico della sessione Google.
+- [x] Tornando sull'app dopo un periodo di inattività la credenziale viene rivalidata una sola volta.
+- [x] Nessun messaggio di errore espone il contenuto del token.
 
 ## Choices
 - decisione: nessun refresh token, re-login a un click alla scadenza.

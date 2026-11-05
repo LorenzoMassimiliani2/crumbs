@@ -1,7 +1,7 @@
 ---
 id: TICKET-0003
 title: Login con Google nella PWA
-status: ready-for-agent
+status: done
 category: enhancement
 blocked_by: [TICKET-0001, TICKET-0002]
 blocks: [TICKET-0004]
@@ -27,12 +27,12 @@ Fuori scope:
 - modifica del layout del diario.
 
 ## Acceptance criteria
-- [ ] Con client ID configurato, il pulsante Google completa il login e il diario si apre.
-- [ ] Le chiamate `/api/*` includono l'ID token e ricevono `200`.
-- [ ] Il token statico funziona ancora dal campo secondario.
-- [ ] Login annullato non lascia credenziali memorizzate e mostra un messaggio.
-- [ ] Senza client ID la schermata non tenta di caricare GIS e propone solo il token.
-- [ ] L'email dell'utente autenticato è visibile dopo il login.
+- [x] Con client ID configurato, il pulsante Google completa il login e il diario si apre.
+- [x] Le chiamate `/api/*` includono l'ID token e ricevono `200`.
+- [x] Il token statico funziona ancora dal campo secondario.
+- [x] Login annullato non lascia credenziali memorizzate e mostra un messaggio.
+- [x] Senza client ID la schermata non tenta di caricare GIS e propone solo il token.
+- [x] L'email dell'utente autenticato è visibile dopo il login.
 
 ## Choices
 - decisione: memorizzare l'ID token in `localStorage` con scadenza esplicita.
