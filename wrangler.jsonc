@@ -4,7 +4,7 @@
   "main": "src/worker/index.ts",
   "compatibility_date": "2026-11-05",
   "vars": {
-    "GOOGLE_CLIENT_ID": ""
+    "GOOGLE_CLIENT_ID": "265851695128-hffla5pilsjmemm49474a1e7dv5hjhlc.apps.googleusercontent.com"
   },
   "assets": {
     "directory": "./dist",
