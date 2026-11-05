@@ -112,18 +112,25 @@ export function isExpired(value: Credential, now = Date.now()): boolean {
   return value.expiresAt !== null && value.expiresAt - now <= EXPIRY_SKEW_MS
 }
 
-export function decodeJwtExpiry(token: string): number | null {
+export function decodeJwtClaims(token: string): Record<string, unknown> | null {
   const payload = token.split('.')[1]
   if (!payload) return null
 
   try {
     const normalized = payload.replace(/-/g, '+').replace(/_/g, '/')
     const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=')
-    const decoded = JSON.parse(atob(padded)) as { exp?: unknown }
-    return typeof decoded.exp === 'number' ? decoded.exp * 1000 : null
+    const decoded = JSON.parse(atob(padded)) as unknown
+    return decoded !== null && typeof decoded === 'object'
+      ? (decoded as Record<string, unknown>)
+      : null
   } catch {
     return null
   }
+}
+
+export function decodeJwtExpiry(token: string): number | null {
+  const exp = decodeJwtClaims(token)?.exp
+  return typeof exp === 'number' ? exp * 1000 : null
 }
 
 let gisLoader: Promise<GoogleAccountsId> | null = null

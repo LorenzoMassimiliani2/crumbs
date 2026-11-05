@@ -86,6 +86,7 @@ Configurazione:
 
 - `GOOGLE_CLIENT_ID`: variabile pubblica in `wrangler.jsonc`; se vuota il login Google è disabilitato.
 - `VITE_GOOGLE_CLIENT_ID`: la stessa client ID in `.env`, letta dal build frontend (è pubblica).
+- Nel client OAuth, tra le **Authorized JavaScript origins**, servono `https://crumbs.massilorenzo94.workers.dev`, `http://localhost:5173` e `http://localhost` (senza slash finale).
 - `ALLOWED_EMAIL`: secret con l'unica email autorizzata (`npx wrangler secret put ALLOWED_EMAIL`).
 - `API_TOKEN`: secret (`npm run secret:api-token`).
 - Sviluppo locale: `ALLOWED_EMAIL` e `API_TOKEN` in `.dev.vars` (git-ignored).
