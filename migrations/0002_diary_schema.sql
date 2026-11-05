@@ -66,9 +66,9 @@ CREATE TABLE meal_items (
   protein_100g  REAL NOT NULL,
   carbs_100g    REAL NOT NULL,
   fat_100g      REAL NOT NULL,
-  fiber_100g    REAL NOT NULL,
-  sugar_100g    REAL NOT NULL,
-  salt_100g     REAL NOT NULL,
+  fiber_100g    REAL,
+  sugar_100g    REAL,
+  salt_100g     REAL,
   grams         REAL NOT NULL,
   position      INTEGER NOT NULL
 );

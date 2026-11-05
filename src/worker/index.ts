@@ -3,6 +3,7 @@ import type { Env } from './env'
 import { exportDiary } from './export'
 import { createFood, deleteFood, updateFood } from './foods'
 import { createMeal, deleteMeal, getDay, listFoods, updateMeal } from './meals'
+import { getOffProduct, searchFoods } from './off'
 import { parseProfile, profileFromRow } from './profile'
 
 type AuthContext = { kind: 'service' } | { kind: 'google'; claims: GoogleClaims }
@@ -189,6 +190,16 @@ const routes: ApiRoute[] = [
     method: 'DELETE',
     pattern: /^\/api\/foods\/([^/]+)$/,
     handler: (_request, env, userId, [id]) => deleteFood(env, userId, id!),
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/foods\/search$/,
+    handler: (request, env) => searchFoods(request, env),
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/foods\/off\/([^/]+)$/,
+    handler: (_request, env, _userId, [code]) => getOffProduct(env, code!),
   },
 ]
 
