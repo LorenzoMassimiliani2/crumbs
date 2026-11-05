@@ -1,7 +1,13 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { RouterView } from 'vue-router'
 
 import TokenGate from '@/components/TokenGate.vue'
+import { credential, identity } from '@/lib/auth'
+
+const accountLabel = computed(
+  () => identity.value?.email ?? (credential.value?.kind === 'service' ? 'Accesso con token' : ''),
+)
 </script>
 
 <template>
@@ -17,6 +23,9 @@ import TokenGate from '@/components/TokenGate.vue'
             C
           </span>
           <span class="text-base font-semibold tracking-tight">Crumbs</span>
+          <span v-if="accountLabel" class="ml-auto truncate text-xs text-muted-foreground">
+            {{ accountLabel }}
+          </span>
         </div>
       </header>
 

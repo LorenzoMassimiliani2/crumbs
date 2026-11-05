@@ -84,10 +84,11 @@ Credenziali accettate:
 
 Configurazione:
 
-- `GOOGLE_CLIENT_ID`: variabile pubblica in `wrangler.jsonc` (vuota finché il client OAuth non è creato; con valore vuoto il login Google è disabilitato).
+- `GOOGLE_CLIENT_ID`: variabile pubblica in `wrangler.jsonc`; se vuota il login Google è disabilitato.
+- `VITE_GOOGLE_CLIENT_ID`: la stessa client ID in `.env`, letta dal build frontend (è pubblica).
 - `ALLOWED_EMAIL`: secret con l'unica email autorizzata (`npx wrangler secret put ALLOWED_EMAIL`).
 - `API_TOKEN`: secret (`npm run secret:api-token`).
-- Sviluppo locale: stessi valori in `.dev.vars` (git-ignored).
+- Sviluppo locale: `ALLOWED_EMAIL` e `API_TOKEN` in `.dev.vars` (git-ignored).
 
 `GET /api/me` restituisce la credenziale usata e, per Google, email, nome e immagine.
 
@@ -135,6 +136,3 @@ npx wrangler deploy
 
 Routing SPA: gestito da `assets.not_found_handling: "single-page-application"` in `wrangler.jsonc`.
 
-## Test e lint
-
-Non ancora configurati, per scelta: verranno aggiunti in una fase successiva.

@@ -1,28 +1,9 @@
-const TOKEN_KEY = 'crumbs.apiToken'
-
-export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY)
-}
-
-export function setToken(token: string): void {
-  localStorage.setItem(TOKEN_KEY, token)
-}
-
-export function clearToken(): void {
-  localStorage.removeItem(TOKEN_KEY)
-}
+import { credential } from './auth'
 
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  const token = getToken()
+  const current = credential.value
   const headers = new Headers(init.headers)
-  if (token) headers.set('Authorization', `Bearer ${token}`)
+  if (current) headers.set('Authorization', `Bearer ${current.token}`)
 
-  const response = await fetch(path, { ...init, headers })
-
-  if (response.status === 401 && token) {
-    clearToken()
-    window.dispatchEvent(new Event('crumbs:unauthorized'))
-  }
-
-  return response
+  return fetch(path, { ...init, headers })
 }
