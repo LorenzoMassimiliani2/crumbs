@@ -1,5 +1,6 @@
 import { verifyGoogleIdToken, type GoogleClaims } from './auth'
 import type { Env } from './env'
+import { createMeal, deleteMeal, getDay, listFoods, updateMeal } from './meals'
 import { parseProfile, profileFromRow } from './profile'
 
 type AuthContext = { kind: 'service' } | { kind: 'google'; claims: GoogleClaims }
@@ -118,6 +119,57 @@ async function handleProfile(request: Request, env: Env, userId: string): Promis
   return Response.json({ error: 'method_not_allowed' }, { status: 405 })
 }
 
+type RouteHandler = (
+  request: Request,
+  env: Env,
+  userId: string,
+  params: string[],
+) => Promise<Response> | Response
+
+interface ApiRoute {
+  method: string
+  pattern: RegExp
+  handler: RouteHandler
+}
+
+const routes: ApiRoute[] = [
+  {
+    method: 'GET',
+    pattern: /^\/api\/profile$/,
+    handler: (request, env, userId) => handleProfile(request, env, userId),
+  },
+  {
+    method: 'PUT',
+    pattern: /^\/api\/profile$/,
+    handler: (request, env, userId) => handleProfile(request, env, userId),
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/days\/(\d{4}-\d{2}-\d{2})$/,
+    handler: (_request, env, userId, [date]) => getDay(env, userId, date!),
+  },
+  {
+    method: 'POST',
+    pattern: /^\/api\/meals$/,
+    handler: (request, env, userId) => createMeal(request, env, userId),
+  },
+  {
+    method: 'PUT',
+    pattern: /^\/api\/meals\/([^/]+)$/,
+    handler: (request, env, userId, [id]) => updateMeal(request, env, userId, id!),
+  },
+  {
+    method: 'DELETE',
+    pattern: /^\/api\/meals\/([^/]+)$/,
+    handler: (_request, env, userId, [id]) => deleteMeal(env, userId, id!),
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/foods$/,
+    handler: (_request, env, userId) => listFoods(env, userId),
+  },
+]
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const { pathname } = new URL(request.url)
@@ -146,18 +198,32 @@ export default {
       })
     }
 
-    if (pathname === '/api/profile') {
-      const userId = await resolveUserId(env, auth!)
-      if (!userId) {
-        return Response.json(
-          {
-            error:
-              "Accesso di servizio senza utente: accedi una volta con Google usando ALLOWED_EMAIL, poi riprova.",
-          },
-          { status: 403 },
-        )
-      }
-      return handleProfile(request, env, userId)
+    if (!pathname.startsWith('/api/')) {
+      return Response.json({ error: 'not_found' }, { status: 404 })
+    }
+
+    const userId = await resolveUserId(env, auth!)
+    if (!userId) {
+      return Response.json(
+        {
+          error:
+            "Accesso di servizio senza utente: accedi una volta con Google usando ALLOWED_EMAIL, poi riprova.",
+        },
+        { status: 403 },
+      )
+    }
+
+    let pathMatched = false
+    for (const route of routes) {
+      const match = route.pattern.exec(pathname)
+      if (!match) continue
+      pathMatched = true
+      if (route.method !== request.method) continue
+      return route.handler(request, env, userId, match.slice(1))
+    }
+
+    if (pathMatched) {
+      return Response.json({ error: 'method_not_allowed' }, { status: 405 })
     }
 
     return Response.json({ error: 'not_found' }, { status: 404 })

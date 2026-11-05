@@ -89,11 +89,19 @@ class TestD1Database implements D1Database {
   }
 
   async batch<T = unknown>(statements: D1PreparedStatement[]): Promise<D1Result<T>[]> {
+    // D1 runs a batch as a single transaction; mirror that so failures roll back.
     const results: D1Result<T>[] = []
-    for (const statement of statements) {
-      results.push(await statement.all<T>())
+    this.db.exec('BEGIN')
+    try {
+      for (const statement of statements) {
+        results.push(await statement.all<T>())
+      }
+      this.db.exec('COMMIT')
+      return results
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
     }
-    return results
   }
 
   async exec(query: string): Promise<D1ExecResult> {
