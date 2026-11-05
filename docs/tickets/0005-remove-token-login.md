@@ -1,7 +1,7 @@
 ---
 id: TICKET-0005
 title: Rimuovere l'accesso con token dalla schermata di login
-status: ready-for-agent
+status: done
 category: enhancement
 blocked_by: []
 blocks: []
@@ -29,13 +29,13 @@ Fuori scope:
 Nota: questo ticket sostituisce il criterio del TICKET-0003 che prevedeva il token come accesso secondario.
 
 ## Acceptance criteria
-- [ ] La schermata di accesso non contiene campo, pulsante o testo riferiti al token.
-- [ ] Con client ID configurato il login Google completa e il diario si apre.
-- [ ] Senza client ID la schermata mostra il messaggio di configurazione mancante.
-- [ ] Una credenziale `service` salvata in localStorage non apre l'app e viene rimossa.
-- [ ] La chiave legacy `crumbs.apiToken` viene rimossa e non autentica.
-- [ ] `API_TOKEN` continua a funzionare con curl su `/api/meals` e `/api/me`.
-- [ ] `npm run type-check` e `npm run build` passano.
+- [x] La schermata di accesso non contiene campo, pulsante o testo riferiti al token.
+- [x] Con client ID configurato il login Google completa e il diario si apre.
+- [x] Senza client ID la schermata mostra il messaggio di configurazione mancante.
+- [x] Una credenziale `service` salvata in localStorage non apre l'app e viene rimossa.
+- [x] La chiave legacy `crumbs.apiToken` viene rimossa e non autentica.
+- [x] `API_TOKEN` continua a funzionare con curl su `/api/meals` e `/api/me`.
+- [x] `npm run type-check` e `npm run build` passano.
 
 ## Choices
 - decisione: rimuovere solo l'accesso con token dalla UI, mantenendo `API_TOKEN` nel Worker.
