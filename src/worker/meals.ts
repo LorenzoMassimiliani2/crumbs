@@ -5,7 +5,7 @@ import {
   type DayMeal,
   type Food,
   type FoodSource,
-  type Totals,
+  type ItemNutrition,
 } from '../lib/diary'
 import { isMealType, type MealType } from '../lib/meal-types'
 import type { Env } from './env'
@@ -20,7 +20,7 @@ export interface MealItemInput {
   sourceId: string | null
   brand: string | null
   grams: number
-  per100g: Totals
+  per100g: ItemNutrition
 }
 
 export interface MealFields {
@@ -59,6 +59,12 @@ function toNonNegative(value: unknown): number | null {
   return value
 }
 
+/** An omitted or explicit null nutrient stays unknown; undefined means malformed. */
+function optionalNutrient(value: unknown): number | null | undefined {
+  if (value === undefined || value === null) return null
+  return toNonNegative(value) ?? undefined
+}
+
 function optionalText(value: unknown, maxLength: number): string | null | undefined {
   if (value === undefined || value === null) return null
   if (typeof value !== 'string') return undefined
@@ -92,20 +98,33 @@ function parseItem(value: unknown): MealItemInput | string {
     return 'I valori per 100 g non sono validi.'
   }
   const per100g = input.per100g as Record<string, unknown>
-  const totals: Totals = {
-    kcal: toNonNegative(per100g.kcal) ?? -1,
-    protein: toNonNegative(per100g.protein) ?? -1,
-    carbs: toNonNegative(per100g.carbs) ?? -1,
-    fat: toNonNegative(per100g.fat) ?? -1,
-    fiber: toNonNegative(per100g.fiber) ?? -1,
-    sugar: toNonNegative(per100g.sugar) ?? -1,
-    salt: toNonNegative(per100g.salt) ?? -1,
-  }
-  if (Object.values(totals).some((amount) => amount < 0)) {
+  const kcal = toNonNegative(per100g.kcal)
+  const protein = toNonNegative(per100g.protein)
+  const carbs = toNonNegative(per100g.carbs)
+  const fat = toNonNegative(per100g.fat)
+  const fiber = optionalNutrient(per100g.fiber)
+  const sugar = optionalNutrient(per100g.sugar)
+  const salt = optionalNutrient(per100g.salt)
+  if (
+    kcal === null ||
+    protein === null ||
+    carbs === null ||
+    fat === null ||
+    fiber === undefined ||
+    sugar === undefined ||
+    salt === undefined
+  ) {
     return 'I valori per 100 g devono essere numeri non negativi.'
   }
 
-  return { name, source: source as FoodSource, sourceId, brand, grams, per100g: totals }
+  return {
+    name,
+    source: source as FoodSource,
+    sourceId,
+    brand,
+    grams,
+    per100g: { kcal, protein, carbs, fat, fiber, sugar, salt },
+  }
 }
 
 export function parseMealInput(body: unknown, requireTiming: boolean): ParsedMeal {
@@ -190,7 +209,20 @@ async function resolveFavorites(
   return resolved
 }
 
-function nutritionValues(item: MealItemInput): number[] {
+/** Favorites keep numeric columns, so an unknown nutrient is stored as 0. */
+function favoriteNutritionValues(item: MealItemInput): number[] {
+  return [
+    item.per100g.kcal,
+    item.per100g.protein,
+    item.per100g.carbs,
+    item.per100g.fat,
+    item.per100g.fiber ?? 0,
+    item.per100g.sugar ?? 0,
+    item.per100g.salt ?? 0,
+  ]
+}
+
+function itemNutritionValues(item: MealItemInput): (number | null)[] {
   return [
     item.per100g.kcal,
     item.per100g.protein,
@@ -217,7 +249,7 @@ function favoriteStatement(
          fiber_100g = ?, sugar_100g = ?, salt_100g = ?,
          last_used_at = ?, updated_at = ?
        WHERE id = ? AND user_id = ?`,
-    ).bind(item.name, item.brand, ...nutritionValues(item), now, now, favorite.id, userId)
+    ).bind(item.name, item.brand, ...favoriteNutritionValues(item), now, now, favorite.id, userId)
   }
 
   return env.DB.prepare(
@@ -233,7 +265,7 @@ function favoriteStatement(
     item.brand,
     item.source,
     item.sourceId,
-    ...nutritionValues(item),
+    ...favoriteNutritionValues(item),
     now,
     now,
     now,
@@ -262,7 +294,7 @@ function itemStatement(
     item.source,
     item.brand,
     item.sourceId,
-    ...nutritionValues(item),
+    ...itemNutritionValues(item),
     item.grams,
     position,
   )
@@ -336,9 +368,9 @@ interface ItemRow {
   protein_100g: number
   carbs_100g: number
   fat_100g: number
-  fiber_100g: number
-  sugar_100g: number
-  salt_100g: number
+  fiber_100g: number | null
+  sugar_100g: number | null
+  salt_100g: number | null
 }
 
 export async function getDay(env: Env, userId: string, date: string): Promise<Response> {
@@ -371,7 +403,7 @@ export async function getDay(env: Env, userId: string, date: string): Promise<Re
 
   const itemsByMeal = new Map<string, DayItem[]>()
   for (const row of itemRows.results) {
-    const per100g: Totals = {
+    const per100g: ItemNutrition = {
       kcal: row.kcal_100g,
       protein: row.protein_100g,
       carbs: row.carbs_100g,

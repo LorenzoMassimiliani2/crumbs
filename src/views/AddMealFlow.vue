@@ -14,6 +14,7 @@ import {
   type Food,
   type FoodSearchResponse,
   type FoodSource,
+  type ItemNutrition,
   type SearchFood,
   type Totals,
 } from '@/lib/diary'
@@ -42,7 +43,7 @@ interface DraftItem {
   source: FoodSource
   sourceId: string | null
   brand: string | null
-  per100g: Totals
+  per100g: ItemNutrition
   grams: number
 }
 
@@ -181,15 +182,7 @@ function addSearchFood(food: SearchFood): void {
     source: food.source,
     sourceId: food.sourceId,
     brand: food.brand,
-    per100g: {
-      kcal: food.per100g.kcal,
-      protein: food.per100g.protein ?? 0,
-      carbs: food.per100g.carbs ?? 0,
-      fat: food.per100g.fat ?? 0,
-      fiber: food.per100g.fiber ?? 0,
-      sugar: food.per100g.sugar ?? 0,
-      salt: food.per100g.salt ?? 0,
-    },
+    per100g: food.per100g,
     grams: 100,
   })
   query.value = ''

@@ -33,6 +33,8 @@ const KJ_HIT = {
   nutriments: {
     'energy-kj_100g': 418.4,
     proteins_100g: 5,
+    carbohydrates_100g: 60,
+    fat_100g: 10,
     sodium_100g: 0.2,
     sugars_100g: 0,
   },
@@ -53,7 +55,7 @@ function withoutKcal(index: number) {
     code: `700${index}`,
     product_name: `Senza valori ${index}`,
     brands: 'Marca',
-    nutriments: { proteins_100g: 1 },
+    nutriments: { proteins_100g: 1, carbohydrates_100g: 1, fat_100g: 1 },
   }
 }
 
@@ -64,7 +66,12 @@ function searchHits() {
       code: `600${index}`,
       product_name: `Prodotto ${index}`,
       brands: ['Marca'],
-      nutriments: { 'energy-kcal_100g': 100 + index },
+      nutriments: {
+        'energy-kcal_100g': 100 + index,
+        proteins_100g: 1,
+        carbohydrates_100g: 1,
+        fat_100g: 1,
+      },
     })),
     withoutKcal(1),
   ]
@@ -153,12 +160,32 @@ describe('GET /api/foods/search', () => {
     expect(body.off[0]!.per100g).toEqual({
       kcal: 100,
       protein: 5,
-      carbs: null,
-      fat: null,
+      carbs: 60,
+      fat: 10,
       fiber: null,
       sugar: 0,
       salt: 0.5,
     })
+  })
+
+  it('drops results missing a required macro', async () => {
+    stubSearch({
+      hits: [
+        {
+          code: '999',
+          product_name: 'Senza proteine',
+          brands: ['Marca'],
+          nutriments: { 'energy-kcal_100g': 100, carbohydrates_100g: 10, fat_100g: 2 },
+        },
+        KJ_HIT,
+      ],
+    })
+
+    const body = (await (await call(env, '/api/foods/search?q=biscotti')).json()) as {
+      off: { name: string }[]
+    }
+
+    expect(body.off.map((food) => food.name)).toEqual(['Biscotti secchi'])
   })
 
   it('sends the app user agent and explicit query fields to the source', async () => {
@@ -302,7 +329,42 @@ describe('GET /api/foods/off/:code', () => {
     const body = (await (await call(env, '/api/foods/off/000221')).json()) as {
       per100g: Record<string, unknown>
     }
-    expect(body.per100g).toMatchObject({ kcal: 100, salt: 0.5, carbs: null })
+    expect(body.per100g).toMatchObject({ kcal: 100, salt: 0.5, carbs: 60, fiber: null })
+  })
+
+  it('falls back to v2 when v3.6 returns empty nutrition', async () => {
+    fetchStub().intercept(/v3\.6\/product\//, () =>
+      Response.json({
+        code: '8003170101142',
+        status: 'success',
+        product: {
+          code: '8003170101142',
+          product_name: 'PANE PROTEICO',
+          brands: 'Piacersi Conad',
+          nutriments: {},
+        },
+      }),
+    )
+    fetchStub().intercept(/\/v2\/product\//, () => Response.json({ ...PRODUCT_BODY, status: 1 }))
+
+    const response = await call(env, '/api/foods/off/8003170101142')
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { per100g: unknown }
+    expect(body.per100g).toEqual(PANE_PER_100G)
+
+    const versions = fetchStub().requests
+      .filter((request) => request.url.includes('/product/'))
+      .map((request) => (request.url.includes('/v2/') ? 'v2' : 'v3.6'))
+    expect(versions).toEqual(['v3.6', 'v2'])
+  })
+
+  it('does not call v2 when v3.6 already has nutrition', async () => {
+    stubProduct()
+
+    await call(env, '/api/foods/off/8003170101142')
+
+    expect(fetchStub().requests.filter((request) => request.url.includes('/v2/'))).toHaveLength(0)
   })
 
   it('caches the product and reuses it on the next call', async () => {

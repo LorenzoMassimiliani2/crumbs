@@ -12,6 +12,17 @@ export interface Totals {
   salt: number
 }
 
+/** Values stored on a meal item: kcal and macros are required, the rest may be unknown. */
+export interface ItemNutrition {
+  kcal: number
+  protein: number
+  carbs: number
+  fat: number
+  fiber: number | null
+  sugar: number | null
+  salt: number | null
+}
+
 export interface Food {
   id: string
   name: string
@@ -22,17 +33,6 @@ export interface Food {
   lastUsedAt: string | null
 }
 
-/** A nutrient value can be absent at the source; absent is null, never 0. */
-export interface NutrientValues {
-  kcal: number
-  protein: number | null
-  carbs: number | null
-  fat: number | null
-  fiber: number | null
-  sugar: number | null
-  salt: number | null
-}
-
 export interface SearchFood {
   id: string
   name: string
@@ -40,7 +40,7 @@ export interface SearchFood {
   barcode: string | null
   source: FoodSource
   sourceId: string | null
-  per100g: NutrientValues
+  per100g: ItemNutrition
   serving: { grams: number; label: string } | null
 }
 
@@ -56,7 +56,7 @@ export interface DayItem {
   brand: string | null
   sourceId: string | null
   grams: number
-  per100g: Totals
+  per100g: ItemNutrition
   totals: Totals
 }
 
@@ -92,16 +92,17 @@ export function round(value: number, digits = 2): number {
   return Math.round(value * factor) / factor
 }
 
-export function itemTotals(per100g: Totals, grams: number): Totals {
+/** Totals ignore unknown nutrients: a null contributes 0 to the day. */
+export function itemTotals(per100g: ItemNutrition, grams: number): Totals {
   const ratio = grams / 100
   return {
     kcal: round(per100g.kcal * ratio, 1),
     protein: round(per100g.protein * ratio, 2),
     carbs: round(per100g.carbs * ratio, 2),
     fat: round(per100g.fat * ratio, 2),
-    fiber: round(per100g.fiber * ratio, 2),
-    sugar: round(per100g.sugar * ratio, 2),
-    salt: round(per100g.salt * ratio, 2),
+    fiber: round((per100g.fiber ?? 0) * ratio, 2),
+    sugar: round((per100g.sugar ?? 0) * ratio, 2),
+    salt: round((per100g.salt ?? 0) * ratio, 2),
   }
 }
 

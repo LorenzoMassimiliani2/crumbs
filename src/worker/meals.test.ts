@@ -113,6 +113,64 @@ describe('POST /api/meals', () => {
     ])
   })
 
+  it('stores unknown fiber, sugar and salt as null and ignores them in totals', async () => {
+    const item = {
+      ...PANE,
+      per100g: { kcal: 356, protein: 12, carbs: 70, fat: 1.5 },
+    }
+
+    const response = await call(env, 'POST', '/api/meals', mealBody({ items: [item] }))
+    expect(response.status).toBe(201)
+
+    const meal = (await response.json()) as {
+      items: { per100g: Record<string, unknown> }[]
+      totals: Record<string, number>
+    }
+    expect(meal.items[0]!.per100g).toEqual({
+      kcal: 356,
+      protein: 12,
+      carbs: 70,
+      fat: 1.5,
+      fiber: null,
+      sugar: null,
+      salt: null,
+    })
+    expect(meal.totals).toMatchObject({ kcal: 534, fiber: 0, sugar: 0, salt: 0 })
+
+    const row = await env.DB.prepare(
+      'SELECT fiber_100g, sugar_100g, salt_100g FROM meal_items',
+    ).first<Record<string, unknown>>()
+    expect(row).toEqual({ fiber_100g: null, sugar_100g: null, salt_100g: null })
+
+    const day = (await (await call(env, 'GET', '/api/days/2026-11-05')).json()) as {
+      items?: unknown
+      totals: Record<string, number>
+      meals: { items: { per100g: Record<string, unknown> }[] }[]
+    }
+    expect(day.meals[0]!.items[0]!.per100g).toMatchObject({
+      fiber: null,
+      sugar: null,
+      salt: null,
+    })
+    expect(day.totals).toMatchObject({ kcal: 534, fiber: 0, sugar: 0, salt: 0 })
+
+    const created = (await (await call(env, 'POST', '/api/meals', mealBody())).json()) as {
+      id: string
+    }
+    const updated = await call(env, 'PUT', `/api/meals/${created.id}`, {
+      type: 'pranzo',
+      items: [
+        {
+          ...PANE,
+          per100g: { kcal: 356, protein: 12, carbs: 70, fat: 1.5, fiber: null, sugar: null, salt: null },
+        },
+      ],
+    })
+    expect(updated.status).toBe(200)
+    const updatedBody = (await updated.json()) as { items: { per100g: Record<string, unknown> }[] }
+    expect(updatedBody.items[0]!.per100g).toMatchObject({ fiber: null, sugar: null, salt: null })
+  })
+
   it('requires a credential', async () => {
     const response = await worker.fetch(
       new Request('https://crumbs.test/api/meals', { method: 'POST' }),
@@ -133,7 +191,7 @@ describe('POST /api/meals', () => {
       mealBody({ items: [{ ...PANE, name: '  ' }] }),
       mealBody({ items: [{ ...PANE, source: 'web' }] }),
       mealBody({ items: [{ ...PANE, per100g: { ...PANE_PER_100G, kcal: -1 } }] }),
-      mealBody({ items: [{ ...PANE, per100g: { ...PANE_PER_100G, salt: undefined } }] }),
+      mealBody({ items: [{ ...PANE, per100g: { ...PANE_PER_100G, kcal: undefined } }] }),
       mealBody({ items: [PANE, { ...PANE, grams: -5 }] }),
       '{',
     ]

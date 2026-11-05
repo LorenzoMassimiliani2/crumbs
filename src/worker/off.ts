@@ -1,8 +1,10 @@
-import type { FoodSearchResponse, NutrientValues, SearchFood } from '../lib/diary'
+import type { FoodSearchResponse, ItemNutrition, SearchFood } from '../lib/diary'
 import type { Env } from './env'
 
 const SEARCH_URL = 'https://search.openfoodfacts.org/search'
-const PRODUCT_URL = 'https://world.openfoodfacts.org/api/v3.6/product'
+const PRODUCT_URL = 'https://world.openfoodfacts.org/api'
+const PRIMARY_PRODUCT_VERSION = 'v3.6'
+const FALLBACK_PRODUCT_VERSION = 'v2'
 const SEARCH_TTL_MS = 7 * 24 * 60 * 60 * 1000
 const PRODUCT_TTL_MS = 30 * 24 * 60 * 60 * 1000
 const MAX_RESULTS = 10
@@ -106,13 +108,16 @@ function normalize(raw: RawProduct): SearchFood | null {
   const nutriments: RawNutriments =
     source !== null && typeof source === 'object' ? (source as RawNutriments) : {}
   const kcal = kcalOf(nutriments)
-  if (kcal === null) return null
+  const protein = numberOrNull(nutriments['proteins_100g'])
+  const carbs = numberOrNull(nutriments['carbohydrates_100g'])
+  const fat = numberOrNull(nutriments['fat_100g'])
+  if (kcal === null || protein === null || carbs === null || fat === null) return null
 
-  const per100g: NutrientValues = {
+  const per100g: ItemNutrition = {
     kcal,
-    protein: numberOrNull(nutriments['proteins_100g']),
-    carbs: numberOrNull(nutriments['carbohydrates_100g']),
-    fat: numberOrNull(nutriments['fat_100g']),
+    protein,
+    carbs,
+    fat,
     fiber: numberOrNull(nutriments['fiber_100g']),
     sugar: numberOrNull(nutriments['sugars_100g']),
     salt: saltOf(nutriments),
@@ -236,6 +241,58 @@ export async function searchFoods(request: Request, env: Env): Promise<Response>
   return Response.json(body)
 }
 
+type FoodResult =
+  | { kind: 'ok'; food: SearchFood | null }
+  | { kind: 'not_found' }
+  | { kind: 'unavailable' }
+
+interface ProductResult {
+  kind: 'ok' | 'not_found' | 'unavailable'
+  product?: RawProduct
+}
+
+async function fetchProduct(
+  env: Env,
+  code: string,
+  version: string,
+): Promise<ProductResult> {
+  const url = new URL(`${PRODUCT_URL}/${version}/product/${code}.json`)
+  url.searchParams.set('fields', PRODUCT_FIELDS)
+
+  try {
+    const { response, body } = await fetchJson(url.toString(), env)
+    if (response.status === 404) return { kind: 'not_found' }
+    if (!response.ok) return { kind: 'unavailable' }
+    const payload = body as { product?: RawProduct }
+    return payload?.product ? { kind: 'ok', product: payload.product } : { kind: 'not_found' }
+  } catch {
+    return { kind: 'unavailable' }
+  }
+}
+
+/**
+ * v3.6 currently answers with an empty `nutriments` object for some products.
+ * When its payload has no usable nutrition, read the same product once more
+ * from v2, whose response still carries the nutrient values.
+ */
+async function readProduct(env: Env, code: string): Promise<FoodResult> {
+  const primary = await fetchProduct(env, code, PRIMARY_PRODUCT_VERSION)
+  if (primary.kind === 'not_found') return { kind: 'not_found' }
+  if (primary.kind === 'unavailable') return { kind: 'unavailable' }
+
+  const direct = normalize(primary.product!)
+  if (direct) return { kind: 'ok', food: direct }
+
+  const fallback = await fetchProduct(env, code, FALLBACK_PRODUCT_VERSION)
+  if (fallback.kind === 'ok') {
+    const food = normalize(fallback.product!)
+    if (food) return { kind: 'ok', food }
+  }
+  if (fallback.kind === 'unavailable') return { kind: 'unavailable' }
+
+  return { kind: 'ok', food: null }
+}
+
 export async function getOffProduct(env: Env, code: string): Promise<Response> {
   if (!/^\d{6,14}$/.test(code)) {
     return Response.json({ error: 'Codice a barre non valido.' }, { status: 400 })
@@ -245,31 +302,21 @@ export async function getOffProduct(env: Env, code: string): Promise<Response> {
   const cached = await readCache(env, key, PRODUCT_TTL_MS)
   if (cached.state === 'fresh') return Response.json(cached.payload)
 
-  const url = new URL(`${PRODUCT_URL}/${code}.json`)
-  url.searchParams.set('fields', PRODUCT_FIELDS)
+  const result = await readProduct(env, code)
 
-  let product: RawProduct | null = null
-  try {
-    const { response, body } = await fetchJson(url.toString(), env)
-    if (response.status === 404) return notFound()
-    if (!response.ok) throw new Error(`open food facts ${response.status}`)
-    const payload = body as { product?: RawProduct; status?: unknown }
-    if (payload?.status === 'success' && payload.product) product = payload.product
-  } catch {
+  if (result.kind === 'not_found') return notFound()
+  if (result.kind === 'unavailable') {
     if (cached.state === 'stale') return Response.json(cached.payload)
     return unavailable()
   }
 
-  if (!product) return notFound()
-
-  const food = normalize(product)
-  if (!food) {
+  if (!result.food) {
     return Response.json(
       { error: 'Il prodotto non ha valori nutrizionali utilizzabili.' },
       { status: 422 },
     )
   }
 
-  await writeCache(env, key, food)
-  return Response.json(food)
+  await writeCache(env, key, result.food)
+  return Response.json(result.food)
 }

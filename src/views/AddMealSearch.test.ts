@@ -16,9 +16,9 @@ const PANE_PER_100G = {
   protein: 14,
   carbs: 37,
   fat: 4.8,
-  fiber: 6.5,
-  sugar: 4.9,
-  salt: 0.99,
+  fiber: null,
+  sugar: null,
+  salt: null,
 }
 
 const PANE = {
@@ -139,5 +139,6 @@ describe('external food search in the add-meal flow', () => {
       grams: 100,
       per100g: PANE_PER_100G,
     })
+    expect((body.items[0]!.per100g as Record<string, unknown>).fiber).toBeNull()
   })
 })
