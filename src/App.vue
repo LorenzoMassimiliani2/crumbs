@@ -5,11 +5,9 @@ import { RouterView } from 'vue-router'
 
 import TokenGate from '@/components/TokenGate.vue'
 import { Button } from '@/components/ui/button'
-import { credential, identity, signOut } from '@/lib/auth'
+import { identity, signOut } from '@/lib/auth'
 
-const accountLabel = computed(
-  () => identity.value?.email ?? (credential.value?.kind === 'service' ? 'Accesso con token' : ''),
-)
+const accountLabel = computed(() => identity.value?.email ?? '')
 </script>
 
 <template>

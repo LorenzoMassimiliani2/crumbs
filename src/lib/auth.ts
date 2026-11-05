@@ -1,17 +1,13 @@
 import { ref } from 'vue'
 
+import { parseCredential, type Credential } from './credential'
+
+export type { Credential } from './credential'
+
 const STORAGE_KEY = 'crumbs.auth'
 const LEGACY_TOKEN_KEY = 'crumbs.apiToken'
 const EXPIRY_SKEW_MS = 60_000
 const GIS_SRC = 'https://accounts.google.com/gsi/client'
-
-export type CredentialKind = 'google' | 'service'
-
-export interface Credential {
-  token: string
-  kind: CredentialKind
-  expiresAt: number | null
-}
 
 export interface Identity {
   email?: string
@@ -57,31 +53,10 @@ export const authMessage = ref('')
 
 function readCredential(): Credential | null {
   const stored = localStorage.getItem(STORAGE_KEY)
-  if (stored) {
-    try {
-      const value = JSON.parse(stored) as Partial<Credential>
-      if (
-        typeof value.token === 'string' &&
-        (value.kind === 'google' || value.kind === 'service')
-      ) {
-        return {
-          token: value.token,
-          kind: value.kind,
-          expiresAt: typeof value.expiresAt === 'number' ? value.expiresAt : null,
-        }
-      }
-    } catch {
-      localStorage.removeItem(STORAGE_KEY)
-    }
-  }
-
-  const legacy = localStorage.getItem(LEGACY_TOKEN_KEY)
-  if (!legacy) return null
-
-  const migrated: Credential = { token: legacy, kind: 'service', expiresAt: null }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated))
+  const parsed = parseCredential(stored)
+  if (stored && !parsed) localStorage.removeItem(STORAGE_KEY)
   localStorage.removeItem(LEGACY_TOKEN_KEY)
-  return migrated
+  return parsed
 }
 
 export function saveCredential(next: Credential): void {

@@ -1,11 +1,8 @@
 <script setup lang="ts">
-import { KeyRound, LoaderCircle } from '@lucide/vue'
+import { LoaderCircle } from '@lucide/vue'
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
-import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { apiFetch } from '@/lib/api'
 import {
   authenticated,
@@ -20,9 +17,7 @@ import {
 } from '@/lib/auth'
 
 const ready = ref(false)
-const token = ref('')
 const error = ref('')
-const checking = ref(false)
 const googleLoading = ref(false)
 const googleButton = ref<HTMLElement | null>(null)
 
@@ -46,13 +41,11 @@ async function refreshIdentity(): Promise<boolean> {
 }
 
 async function initialCheck(): Promise<void> {
-  const saved = credential.value
-  if (!saved) {
+  if (!credential.value) {
     ready.value = true
     return
   }
 
-  checking.value = true
   try {
     if (await refreshIdentity()) {
       authenticated.value = true
@@ -62,7 +55,6 @@ async function initialCheck(): Promise<void> {
   } catch {
     error.value = 'Impossibile contattare il server.'
   } finally {
-    checking.value = false
     ready.value = true
   }
 }
@@ -106,7 +98,7 @@ async function initGoogle(): Promise<void> {
     await nextTick()
     renderGoogleButton()
   } catch {
-    error.value = "Login Google non disponibile. Usa l'accesso con token."
+    error.value = 'Impossibile caricare il login Google.'
   } finally {
     googleLoading.value = false
   }
@@ -126,7 +118,7 @@ async function completeGoogleLogin(value: string | undefined): Promise<void> {
 
   error.value = ''
   try {
-    saveCredential({ token: value, kind: 'google', expiresAt })
+    saveCredential({ token: value, expiresAt })
     if (await refreshIdentity()) {
       authenticated.value = true
     } else {
@@ -136,31 +128,6 @@ async function completeGoogleLogin(value: string | undefined): Promise<void> {
   } catch {
     clearCredential()
     error.value = 'Impossibile contattare il server.'
-  }
-}
-
-async function submitToken(): Promise<void> {
-  const value = token.value.trim()
-  if (!value) return
-
-  error.value = ''
-  checking.value = true
-  try {
-    const response = await fetch('/api/me', {
-      headers: { Authorization: `Bearer ${value}` },
-    })
-    if (response.ok) {
-      saveCredential({ token: value, kind: 'service', expiresAt: null })
-      identity.value = null
-      token.value = ''
-      authenticated.value = true
-    } else {
-      error.value = 'Token non valido.'
-    }
-  } catch {
-    error.value = 'Impossibile contattare il server.'
-  } finally {
-    checking.value = false
   }
 }
 
@@ -212,9 +179,7 @@ onBeforeUnmount(() => {
     <Card class="w-full max-w-sm">
       <CardHeader>
         <CardTitle>Accesso</CardTitle>
-        <CardDescription>
-          Accedi con Google oppure usa il token di accesso.
-        </CardDescription>
+        <CardDescription>Accedi per aprire il diario.</CardDescription>
       </CardHeader>
       <CardContent class="space-y-4">
         <div v-if="googleClientId" class="flex min-h-10 items-center justify-center">
@@ -226,42 +191,13 @@ onBeforeUnmount(() => {
           />
         </div>
 
+        <p v-else class="text-sm text-muted-foreground">
+          Login Google non configurato.
+        </p>
+
         <p v-if="authMessage || error" class="text-sm text-destructive">
           {{ error || authMessage }}
         </p>
-
-        <div v-if="googleClientId" class="relative">
-          <div class="absolute inset-0 flex items-center">
-            <span class="w-full border-t border-border" />
-          </div>
-          <div class="relative flex justify-center text-xs uppercase">
-            <span class="bg-card px-2 text-muted-foreground">oppure</span>
-          </div>
-        </div>
-
-        <form class="space-y-4" @submit.prevent="submitToken">
-          <div class="space-y-2">
-            <Label for="api-token">Token di accesso</Label>
-            <Input
-              id="api-token"
-              v-model="token"
-              type="password"
-              autocomplete="current-password"
-              placeholder="••••••••"
-            />
-          </div>
-
-          <Button
-            type="submit"
-            :variant="googleClientId ? 'outline' : 'default'"
-            class="w-full"
-            :disabled="checking || !token.trim()"
-          >
-            <LoaderCircle v-if="checking" class="animate-spin" aria-hidden="true" />
-            <KeyRound v-else aria-hidden="true" />
-            Entra con token
-          </Button>
-        </form>
       </CardContent>
     </Card>
   </div>
