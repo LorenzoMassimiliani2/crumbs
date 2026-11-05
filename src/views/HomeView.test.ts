@@ -393,4 +393,138 @@ describe('favorite management', () => {
     expect(wrapper.text()).toContain('Valori non validi')
     expect(wrapper.find('#edit-food-name').exists()).toBe(true)
   })
+
+  it('renders the meal type as a labelled grid with an icon per option', async () => {
+    stubDay()
+
+    const wrapper = mount(HomeView)
+    await flushPromises()
+    await wrapper.get('[data-testid="add-meal"]').trigger('click')
+    await flushPromises()
+
+    const picker = wrapper.get('[data-testid="meal-type-picker"]')
+    expect(picker.classes()).toContain('grid-cols-6')
+    const options = picker.findAll('[data-testid^="meal-type-"]')
+    expect(options).toHaveLength(6)
+    expect(options.map((option) => option.text())).toEqual([
+      'Colazione',
+      'Mattina',
+      'Pranzo',
+      'Pomeriggio',
+      'Cena',
+      'Dopo cena',
+    ])
+    expect(options.map((option) => option.attributes('aria-label'))).toEqual([
+      'Colazione',
+      'Merenda mattina',
+      'Pranzo',
+      'Merenda pomeriggio',
+      'Cena',
+      'Post-cena',
+    ])
+    expect(options.every((option) => option.find('svg').exists())).toBe(true)
+    expect(wrapper.get('[data-testid="meal-type-pranzo"]').attributes('aria-pressed')).toBe('true')
+
+    await wrapper.get('[data-testid="meal-type-post_cena"]').trigger('click')
+    expect(wrapper.get('[data-testid="meal-type-post_cena"]').attributes('aria-pressed')).toBe('true')
+    expect(wrapper.get('[data-testid="meal-type-pranzo"]').attributes('aria-pressed')).toBe('false')
+  })
+
+  it('shows kcal and macros per item and adjusts grams with the stepper', async () => {
+    stubDay()
+
+    const wrapper = mount(HomeView)
+    await flushPromises()
+    await wrapper.get('[data-testid="add-meal"]').trigger('click')
+    await flushPromises()
+
+    const mela = wrapper.findAll('button').find((button) => button.text().includes('Mela'))!
+    await mela.trigger('click')
+
+    const macroRow = wrapper.get('[data-testid="item-macros-Mela"]')
+    expect(macroRow.find('[data-testid="item-kcal-Mela"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="item-kcal-Mela"]').text()).toContain('52')
+    const macros = macroRow.text()
+    expect(macros).toContain('P')
+    expect(macros).toContain('0,3 g')
+    expect(macros).toContain('C')
+    expect(macros).toContain('14 g')
+    expect(macros).toContain('G')
+    expect(macros).toContain('0,2 g')
+
+    const gramsInput = wrapper.get('[aria-label="Grammi Mela"]')
+    expect(gramsInput.attributes('type')).toBe('text')
+    expect(gramsInput.attributes('step')).toBeUndefined()
+
+    const grams = () => (wrapper.get('[aria-label="Grammi Mela"]').element as HTMLInputElement).value
+    expect(grams()).toBe('100')
+
+    await wrapper.get('[aria-label="Aumenta grammi Mela"]').trigger('click')
+    expect(grams()).toBe('110')
+
+    await wrapper.get('[aria-label="Diminuisci grammi Mela"]').trigger('click')
+    await wrapper.get('[aria-label="Diminuisci grammi Mela"]').trigger('click')
+    await wrapper.get('[aria-label="Diminuisci grammi Mela"]').trigger('click')
+    expect(grams()).toBe('80')
+    expect(wrapper.get('[data-testid="item-kcal-Mela"]').text()).toContain('42')
+    expect(draftTotal(wrapper)).toContain('42')
+  })
+
+  it('shows favorites highlighted inside the active food group, without a separate favorites list', async () => {
+    stubDay()
+
+    const wrapper = mount(HomeView)
+    await flushPromises()
+    await wrapper.get('[data-testid="add-meal"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('Nessun preferito trovato')
+    expect(wrapper.text()).not.toContain('Preferiti')
+
+    const group = wrapper.get('[data-testid="usda-group"]')
+    const favorite = group.get('[data-testid="favorite-row"]')
+    expect(favorite.text()).toContain('Mela')
+    expect(favorite.text()).toContain('Preferito')
+    expect(favorite.classes()).toContain('border-primary/50')
+
+    await wrapper.get('[data-testid="source-select"]').setValue('off')
+    expect(wrapper.find('[data-testid="favorite-row"]').exists()).toBe(false)
+  })
+
+  it('lists matching favorites before the online results', async () => {
+    stubDay()
+    fetchStub().intercept(/\/api\/foods\/search/, () =>
+      Response.json({
+        off: [],
+        usda: [
+          {
+            id: '1750340',
+            name: 'Mela Golden',
+            brand: null,
+            barcode: null,
+            source: 'usda',
+            sourceId: '1750340',
+            per100g: { kcal: 52, protein: 0.3, carbs: 14, fat: 0.2, fiber: 2.4, sugar: 10, salt: 0 },
+            serving: null,
+          },
+        ],
+      }),
+    )
+
+    const wrapper = mount(HomeView)
+    await flushPromises()
+    await wrapper.get('[data-testid="add-meal"]').trigger('click')
+    await flushPromises()
+
+    await wrapper.get('input[aria-label="Cerca alimenti e prodotti"]').setValue('mel')
+    await wrapper.get('input[aria-label="Cerca alimenti e prodotti"]').trigger('keydown.enter')
+    await flushPromises()
+
+    const rows = wrapper
+      .get('[data-testid="usda-group"]')
+      .element.querySelectorAll('[data-testid="favorite-row"], [data-testid="usda-result"]')
+    expect(rows).toHaveLength(2)
+    expect(rows[0]!.textContent).toContain('Preferito')
+    expect(rows[1]!.textContent).toContain('Mela Golden')
+  })
 })

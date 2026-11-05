@@ -1,6 +1,8 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
+import { initTheme, theme } from '@/composables/useTheme'
+
 import AccountMenu from './AccountMenu.vue'
 
 describe('AccountMenu', () => {
@@ -29,6 +31,46 @@ describe('AccountMenu', () => {
     await items[0]!.trigger('click')
     expect(wrapper.emitted('signOut')).toHaveLength(1)
     expect(wrapper.find('[role="menu"]').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it('shows the theme selector above Esci, with Chiaro selected by default', async () => {
+    localStorage.clear()
+    initTheme()
+    const wrapper = mount(AccountMenu, { props: { name: 'Lorenzo' }, attachTo: document.body })
+
+    await wrapper.get('button').trigger('click')
+
+    const options = wrapper.findAll('[role="radio"]')
+    expect(options.map((option) => option.text())).toEqual(['Chiaro', 'Scuro'])
+    expect(options[0]!.attributes('aria-checked')).toBe('true')
+    expect(options[1]!.attributes('aria-checked')).toBe('false')
+
+    const menuitems = wrapper.findAll('[role="menuitem"]')
+    expect(menuitems.map((item) => item.text())).toEqual(['Esci'])
+    expect(options[0]!.element.compareDocumentPosition(menuitems[0]!.element)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    )
+
+    wrapper.unmount()
+  })
+
+  it('switches to the dark theme and keeps Esci working', async () => {
+    localStorage.clear()
+    initTheme()
+    const wrapper = mount(AccountMenu, { props: { name: 'Lorenzo' }, attachTo: document.body })
+
+    await wrapper.get('button').trigger('click')
+    await wrapper.findAll('[role="radio"]')[1]!.trigger('click')
+
+    expect(theme.value).toBe('dark')
+    expect(document.documentElement.classList.contains('dark')).toBe(true)
+    expect(localStorage.getItem('crumbs.theme')).toBe('dark')
+    expect(wrapper.findAll('[role="radio"]')[1]!.attributes('aria-checked')).toBe('true')
+
+    await wrapper.get('[role="menuitem"]').trigger('click')
+    expect(wrapper.emitted('signOut')).toHaveLength(1)
 
     wrapper.unmount()
   })

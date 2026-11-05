@@ -1,5 +1,18 @@
 <script setup lang="ts">
-import { Pencil, Plus, Search, Trash2, X } from '@lucide/vue'
+import {
+  Apple,
+  Coffee,
+  Cookie,
+  Minus,
+  Moon,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+  Utensils,
+  UtensilsCrossed,
+  X,
+} from '@lucide/vue'
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 
 import { Button } from '@/components/ui/button'
@@ -64,6 +77,26 @@ function draftFromMeal(meal: DayMeal | null | undefined): DraftItem[] {
   }))
 }
 
+const MEAL_TYPE_ICONS: Record<MealType, typeof Coffee> = {
+  colazione: Coffee,
+  merenda_mattina: Apple,
+  pranzo: UtensilsCrossed,
+  merenda_pomeriggio: Cookie,
+  cena: Utensils,
+  post_cena: Moon,
+}
+
+const MEAL_TYPE_SHORT_LABELS: Record<MealType, string> = {
+  colazione: 'Colazione',
+  merenda_mattina: 'Mattina',
+  pranzo: 'Pranzo',
+  merenda_pomeriggio: 'Pomeriggio',
+  cena: 'Cena',
+  post_cena: 'Dopo cena',
+}
+
+const GRAMS_STEP = 10
+
 const type = ref<MealType>(props.meal?.type ?? suggestMealType())
 const note = ref(props.meal?.note ?? '')
 const draft = ref<DraftItem[]>(draftFromMeal(props.meal))
@@ -114,13 +147,22 @@ const foodForm = reactive({
   salt: '',
 })
 
-const filteredFavorites = computed(() => {
+/** Favorites belong to the active search group: packaged products vs simple foods. */
+const favoriteMatches = computed(() => {
   const term = query.value.trim().toLowerCase()
-  if (!term) return props.favorites
   return props.favorites.filter((food) => {
-    const haystack = `${food.name} ${food.brand ?? ''}`.toLowerCase()
-    return haystack.includes(term)
+    if (source.value === 'off' ? food.source !== 'off' : food.source === 'off') return false
+    if (!term) return true
+    return `${food.name} ${food.brand ?? ''}`.toLowerCase().includes(term)
   })
+})
+
+/** Do not list the same food twice when the remote search returns a saved favorite. */
+const visibleResults = computed(() => {
+  const saved = new Set(
+    favoriteMatches.value.map((food) => food.sourceId).filter((id): id is string => id !== null),
+  )
+  return searchResults.value.filter((food) => food.sourceId === null || !saved.has(food.sourceId))
 })
 
 const draftTotals = computed(() =>
@@ -257,7 +299,13 @@ watch(source, () => {
 onBeforeUnmount(clearSearchTimer)
 
 function setGrams(item: DraftItem, event: Event): void {
-  item.grams = Number((event.target as HTMLInputElement).value)
+  const value = Number((event.target as HTMLInputElement).value.replace(',', '.'))
+  item.grams = Number.isFinite(value) ? value : 0
+}
+
+function stepGrams(item: DraftItem, delta: number): void {
+  const next = (Number.isFinite(item.grams) ? item.grams : 0) + delta
+  item.grams = Math.min(5000, Math.max(1, round(next, 1)))
 }
 
 function removeItem(key: number): void {
@@ -504,7 +552,13 @@ async function remove(): Promise<void> {
 }
 
 const gramsInputClass =
-  'h-9 w-20 rounded-md border border-input bg-transparent px-2 text-center text-sm tabular-nums outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
+  'w-16 bg-transparent py-1 text-sm font-medium tabular-nums outline-none focus-visible:text-foreground'
+
+const macroDotClass: Record<'protein' | 'carbs' | 'fat', string> = {
+  protein: 'bg-sky-500',
+  carbs: 'bg-amber-500',
+  fat: 'bg-rose-500',
+}
 </script>
 
 <template>
@@ -526,27 +580,41 @@ const gramsInputClass =
       </header>
 
       <div class="flex-1 space-y-5 overflow-y-auto px-4 pb-40 pt-4">
-        <div class="flex gap-2 overflow-x-auto pb-1">
-          <button
-            v-for="option in MEAL_TYPES"
-            :key="option"
-            type="button"
-            :data-testid="`meal-type-${option}`"
-            :aria-pressed="type === option"
-            class="shrink-0 rounded-full border px-3 py-1.5 text-xs"
-            :class="
-              type === option
-                ? 'border-primary bg-primary text-primary-foreground'
-                : 'border-border text-muted-foreground'
-            "
-            @click="type = option"
+        <section class="space-y-2">
+          <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Tipo di pasto
+          </p>
+          <div
+            data-testid="meal-type-picker"
+            role="group"
+            aria-label="Tipo di pasto"
+            class="grid grid-cols-6 gap-1"
           >
-            {{ MEAL_TYPE_LABELS[option] }}
-          </button>
-        </div>
+            <button
+              v-for="option in MEAL_TYPES"
+              :key="option"
+              type="button"
+              :data-testid="`meal-type-${option}`"
+              :aria-label="MEAL_TYPE_LABELS[option]"
+              :aria-pressed="type === option"
+              class="flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-lg border px-0.5 py-2 text-center text-[10px] font-medium leading-tight transition-colors"
+              :class="
+                type === option
+                  ? 'border-primary bg-primary text-primary-foreground shadow-xs'
+                  : 'border-border bg-card text-muted-foreground hover:border-foreground/25 hover:text-foreground'
+              "
+              @click="type = option"
+            >
+              <component :is="MEAL_TYPE_ICONS[option]" class="size-4 shrink-0" aria-hidden="true" />
+              <span class="hyphens-auto break-words">{{ MEAL_TYPE_SHORT_LABELS[option] }}</span>
+            </button>
+          </div>
+        </section>
 
         <section class="space-y-2">
-          <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Preferiti</p>
+          <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Cerca alimento
+          </p>
 
           <div class="flex gap-2">
             <div class="relative min-w-0 flex-1">
@@ -557,8 +625,8 @@ const gramsInputClass =
               <Input
                 v-model="query"
                 type="search"
-                aria-label="Cerca nei preferiti"
-                placeholder="Cerca un alimento"
+                aria-label="Cerca alimenti e prodotti"
+                placeholder="Cerca un alimento o un prodotto"
                 class="pl-9"
                 @keydown.enter.prevent="runSearch"
               />
@@ -577,52 +645,6 @@ const gramsInputClass =
           <p v-if="searchError" data-testid="search-error" role="alert" class="text-xs text-destructive">
             {{ searchError }}
             <span v-if="usdaMissing">Scegli "Prodotti confezionati" o crea un alimento.</span>
-          </p>
-
-          <div v-if="filteredFavorites.length" class="space-y-2">
-            <div
-              v-for="food in filteredFavorites"
-              :key="food.id"
-              data-testid="favorite-row"
-              class="flex items-center gap-1 rounded-xl border border-border bg-card pr-1"
-            >
-              <button
-                type="button"
-                class="flex min-w-0 flex-1 items-center justify-between gap-2 px-3 py-2.5 text-left"
-                @click="addFavorite(food)"
-              >
-                <span class="min-w-0">
-                  <span class="block truncate text-sm">{{ food.name }}</span>
-                  <span class="block text-xs text-muted-foreground">
-                    {{ food.brand ?? (food.source === 'manual' ? 'Manuale' : food.source.toUpperCase()) }}
-                    · {{ formatKcal(food.per100g.kcal) }} kcal/100 g
-                  </span>
-                </span>
-                <Plus class="size-4 text-muted-foreground" aria-hidden="true" />
-              </button>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                type="button"
-                :aria-label="`Modifica preferito ${food.name}`"
-                @click="openFoodEdit(food)"
-              >
-                <Pencil />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                type="button"
-                :aria-label="`Elimina preferito ${food.name}`"
-                @click="askFoodDelete(food)"
-              >
-                <Trash2 />
-              </Button>
-            </div>
-          </div>
-
-          <p v-else class="rounded-xl border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
-            Nessun preferito trovato.
           </p>
 
           <Button
@@ -711,7 +733,7 @@ const gramsInputClass =
         </section>
 
         <section
-          v-if="query.trim().length >= 3"
+          v-if="favoriteMatches.length || query.trim().length >= 3"
           :data-testid="source === 'off' ? 'off-group' : 'usda-group'"
           class="space-y-2"
         >
@@ -719,11 +741,61 @@ const gramsInputClass =
             {{ source === 'off' ? 'Prodotti confezionati' : 'Alimenti semplici' }}
           </p>
 
+          <div v-if="favoriteMatches.length" class="space-y-2">
+            <div
+              v-for="food in favoriteMatches"
+              :key="food.id"
+              data-testid="favorite-row"
+              class="flex items-center gap-1 rounded-xl border border-primary/50 bg-primary/5 pr-1"
+            >
+              <button
+                type="button"
+                class="flex min-w-0 flex-1 items-center justify-between gap-2 px-3 py-2.5 text-left"
+                @click="addFavorite(food)"
+              >
+                <span class="min-w-0">
+                  <span class="flex items-center gap-1.5">
+                    <span class="truncate text-sm">{{ food.name }}</span>
+                    <span
+                      data-testid="favorite-badge"
+                      class="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary"
+                    >
+                      Preferito
+                    </span>
+                  </span>
+                  <span class="block text-xs text-muted-foreground">
+                    {{ food.brand ?? (food.source === 'manual' ? 'Manuale' : food.source.toUpperCase()) }}
+                    · {{ formatKcal(food.per100g.kcal) }} kcal/100 g
+                  </span>
+                </span>
+                <Plus class="size-4 text-muted-foreground" aria-hidden="true" />
+              </button>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                type="button"
+                :aria-label="`Modifica preferito ${food.name}`"
+                @click="openFoodEdit(food)"
+              >
+                <Pencil />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                type="button"
+                :aria-label="`Elimina preferito ${food.name}`"
+                @click="askFoodDelete(food)"
+              >
+                <Trash2 />
+              </Button>
+            </div>
+          </div>
+
           <p v-if="searching" class="text-xs text-muted-foreground">Ricerca…</p>
 
-          <div v-else-if="searchResults.length" class="space-y-2">
+          <div v-else-if="visibleResults.length" class="space-y-2">
             <button
-              v-for="food in searchResults"
+              v-for="food in visibleResults"
               :key="food.id"
               type="button"
               :data-testid="source === 'off' ? 'off-result' : 'usda-result'"
@@ -743,7 +815,7 @@ const gramsInputClass =
           </div>
 
           <p
-            v-else-if="searchedTerm"
+            v-else-if="searchedTerm && favoriteMatches.length === 0"
             class="rounded-xl border border-dashed border-border p-4 text-center text-xs text-muted-foreground"
           >
             {{ source === 'off' ? 'Nessun prodotto trovato.' : 'Nessun alimento trovato.' }}
@@ -804,41 +876,92 @@ const gramsInputClass =
           <div
             v-for="item in draft"
             :key="item.key"
-            class="rounded-xl border border-border bg-card px-3 py-2.5"
+            class="rounded-xl border border-border bg-card px-3 py-3"
           >
-            <div class="flex items-start justify-between gap-2">
-              <div class="min-w-0">
-                <p class="truncate text-sm">{{ item.name }}</p>
-                <p class="text-xs text-muted-foreground">
-                  {{ formatKcal(itemTotals(item.per100g, item.grams).kcal) }} kcal · P
-                  {{ macroText(item.per100g.protein, item.grams) }} · C
-                  {{ macroText(item.per100g.carbs, item.grams) }} · G
-                  {{ macroText(item.per100g.fat, item.grams) }}
-                </p>
-              </div>
+            <div class="flex items-center justify-between gap-3">
+              <p class="min-w-0 truncate text-sm font-medium">{{ item.name }}</p>
               <Button
                 variant="ghost"
                 size="icon-xs"
                 type="button"
+                class="-mr-1 shrink-0"
                 :aria-label="`Rimuovi ${item.name}`"
                 @click="removeItem(item.key)"
               >
                 <X />
               </Button>
             </div>
-            <div class="mt-2 flex items-center gap-2">
-              <input
-                :value="item.grams"
-                :aria-label="`Grammi ${item.name}`"
-                type="number"
-                inputmode="decimal"
-                min="1"
-                max="5000"
-                step="any"
-                :class="gramsInputClass"
-                @input="setGrams(item, $event)"
-              />
-              <span class="text-xs text-muted-foreground">g</span>
+
+            <dl
+              :data-testid="`item-macros-${item.name}`"
+              class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground"
+            >
+              <p
+                :data-testid="`item-kcal-${item.name}`"
+                class="ml-auto shrink-0 text-sm font-semibold tabular-nums text-foreground"
+              >
+                {{ formatKcal(itemTotals(item.per100g, item.grams).kcal) }}
+                <span class="text-[11px] font-normal text-muted-foreground">kcal</span>
+              </p>
+              <div class="flex items-center gap-1">
+                <span :class="macroDotClass.protein" class="size-1.5 rounded-full" aria-hidden="true"></span>
+                <dt>P</dt>
+                <dd class="font-medium tabular-nums text-foreground">
+                  {{ macroText(item.per100g.protein, item.grams) }}
+                </dd>
+              </div>
+              <div class="flex items-center gap-1">
+                <span :class="macroDotClass.carbs" class="size-1.5 rounded-full" aria-hidden="true"></span>
+                <dt>C</dt>
+                <dd class="font-medium tabular-nums text-foreground">
+                  {{ macroText(item.per100g.carbs, item.grams) }}
+                </dd>
+              </div>
+              <div class="flex items-center gap-1">
+                <span :class="macroDotClass.fat" class="size-1.5 rounded-full" aria-hidden="true"></span>
+                <dt>G</dt>
+                <dd class="font-medium tabular-nums text-foreground">
+                  {{ macroText(item.per100g.fat, item.grams) }}
+                </dd>
+              </div>
+            </dl>
+
+            <div class="mt-3 flex items-center justify-between gap-3 border-t border-border pt-2.5">
+              <span class="text-[11px] text-muted-foreground">Quantità</span>
+              <div
+                :data-testid="`grams-stepper-${item.name}`"
+                class="flex h-9 items-center rounded-lg border border-input bg-background"
+              >
+                <button
+                  type="button"
+                  class="flex size-9 items-center justify-center text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40"
+                  :aria-label="`Diminuisci grammi ${item.name}`"
+                  :disabled="item.grams <= 1"
+                  @click="stepGrams(item, -GRAMS_STEP)"
+                >
+                  <Minus class="size-4" aria-hidden="true" />
+                </button>
+                <input
+                  :value="item.grams"
+                  :aria-label="`Grammi ${item.name}`"
+                  type="text"
+                  inputmode="decimal"
+                  autocomplete="off"
+                  :class="gramsInputClass"
+                  class="text-center"
+                  @input="setGrams(item, $event)"
+                />
+                <span class="pr-1 text-xs text-muted-foreground">g</span>
+                <button
+                  type="button"
+                  class="flex size-9 items-center justify-center text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40"
+                  :aria-label="`Aumenta grammi ${item.name}`"
+                  :disabled="item.grams >= 5000"
+                  @click="stepGrams(item, GRAMS_STEP)"
+                >
+                  <Plus class="size-4" aria-hidden="true" />
+                </button>
+              </div>
             </div>
           </div>
 

@@ -87,7 +87,7 @@ describe('external food search in the add-meal flow', () => {
     stubApp()
     const wrapper = await openFlow()
 
-    await wrapper.get('input[aria-label="Cerca nei preferiti"]').setValue('pa')
+    await wrapper.get('input[aria-label="Cerca alimenti e prodotti"]').setValue('pa')
     await vi.advanceTimersByTimeAsync(2000)
     await flushPromises()
 
@@ -111,7 +111,7 @@ describe('external food search in the add-meal flow', () => {
     const wrapper = await openFlow()
 
     await wrapper.get('[data-testid="source-select"]').setValue('off')
-    await wrapper.get('input[aria-label="Cerca nei preferiti"]').setValue('pane')
+    await wrapper.get('input[aria-label="Cerca alimenti e prodotti"]').setValue('pane')
     expect(searchRequests()).toHaveLength(0)
 
     await vi.advanceTimersByTimeAsync(600)
@@ -133,7 +133,7 @@ describe('external food search in the add-meal flow', () => {
     stubApp()
     const wrapper = await openFlow()
 
-    const input = wrapper.get('input[aria-label="Cerca nei preferiti"]')
+    const input = wrapper.get('input[aria-label="Cerca alimenti e prodotti"]')
     await input.setValue('pane')
     await input.trigger('keydown.enter')
     await flushPromises()
@@ -146,7 +146,7 @@ describe('external food search in the add-meal flow', () => {
     const wrapper = await openFlow()
 
     await wrapper.get('[data-testid="source-select"]').setValue('off')
-    await wrapper.get('input[aria-label="Cerca nei preferiti"]').setValue('pane')
+    await wrapper.get('input[aria-label="Cerca alimenti e prodotti"]').setValue('pane')
     await vi.advanceTimersByTimeAsync(600)
     await flushPromises()
 
@@ -187,7 +187,7 @@ describe('external food search in the add-meal flow', () => {
 
     const wrapper = await openFlow()
 
-    await wrapper.get('input[aria-label="Cerca nei preferiti"]').setValue('pane')
+    await wrapper.get('input[aria-label="Cerca alimenti e prodotti"]').setValue('pane')
     await vi.advanceTimersByTimeAsync(600)
     await flushPromises()
 
@@ -216,7 +216,7 @@ describe('external food search in the add-meal flow', () => {
 
     const wrapper = await openFlow()
 
-    await wrapper.get('input[aria-label="Cerca nei preferiti"]').setValue('mela')
+    await wrapper.get('input[aria-label="Cerca alimenti e prodotti"]').setValue('mela')
     await vi.advanceTimersByTimeAsync(600)
     await flushPromises()
 
@@ -233,7 +233,7 @@ describe('external food search in the add-meal flow', () => {
 
     const wrapper = await openFlow()
 
-    await wrapper.get('input[aria-label="Cerca nei preferiti"]').setValue('mela')
+    await wrapper.get('input[aria-label="Cerca alimenti e prodotti"]').setValue('mela')
     await vi.advanceTimersByTimeAsync(600)
     await flushPromises()
 

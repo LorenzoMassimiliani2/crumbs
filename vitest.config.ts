@@ -26,7 +26,11 @@ export default defineConfig({
         test: {
           name: 'views',
           environment: 'happy-dom',
-          include: ['src/views/**/*.test.ts', 'src/components/**/*.test.ts'],
+          include: [
+            'src/views/**/*.test.ts',
+            'src/components/**/*.test.ts',
+            'src/composables/**/*.test.ts',
+          ],
           setupFiles: [FETCH_SETUP],
         },
       },
