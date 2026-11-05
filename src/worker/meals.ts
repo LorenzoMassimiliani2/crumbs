@@ -526,6 +526,8 @@ interface FoodRow {
   fiber_100g: number
   sugar_100g: number
   salt_100g: number
+  serving_g: number | null
+  serving_label: string | null
   last_used_at: string | null
 }
 
@@ -533,7 +535,7 @@ export async function listFoods(env: Env, userId: string): Promise<Response> {
   const rows = await env.DB.prepare(
     `SELECT id, name, brand, source, source_id,
             kcal_100g, protein_100g, carbs_100g, fat_100g, fiber_100g, sugar_100g, salt_100g,
-            last_used_at
+            serving_g, serving_label, last_used_at
      FROM foods
      WHERE user_id = ?
      ORDER BY last_used_at DESC, lower(name) ASC`,
@@ -556,6 +558,8 @@ export async function listFoods(env: Env, userId: string): Promise<Response> {
       sugar: row.sugar_100g,
       salt: row.salt_100g,
     },
+    servingG: row.serving_g,
+    servingLabel: row.serving_label,
     lastUsedAt: row.last_used_at,
   }))
 

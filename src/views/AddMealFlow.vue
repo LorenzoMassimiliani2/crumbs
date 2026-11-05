@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Plus, Search, X } from '@lucide/vue'
+import { Pencil, Plus, Search, Trash2, X } from '@lucide/vue'
 import { computed, reactive, ref } from 'vue'
 
 import { Button } from '@/components/ui/button'
@@ -32,6 +32,7 @@ const emit = defineEmits<{
   close: []
   saved: []
   deleted: []
+  favoritesChanged: []
 }>()
 
 interface DraftItem {
@@ -79,7 +80,25 @@ const manual = reactive({
   salt: '',
 })
 
+const FOOD_MACROS = ['kcal', 'protein', 'carbs', 'fat', 'fiber', 'sugar', 'salt'] as const
+
 const editing = computed(() => props.meal != null)
+
+const editingFood = ref<Food | null>(null)
+const deletingFood = ref<Food | null>(null)
+const foodSaving = ref(false)
+const foodFeedback = ref('')
+const foodError = ref('')
+const foodForm = reactive({
+  name: '',
+  kcal: '',
+  protein: '',
+  carbs: '',
+  fat: '',
+  fiber: '',
+  sugar: '',
+  salt: '',
+})
 
 const filteredFavorites = computed(() => {
   const term = query.value.trim().toLowerCase()
@@ -159,6 +178,101 @@ function addManual(): void {
   creating.value = false
   query.value = ''
   error.value = ''
+}
+
+function fillFoodForm(food: Food): void {
+  foodForm.name = food.name
+  for (const macro of FOOD_MACROS) foodForm[macro] = String(food.per100g[macro])
+}
+
+function openFoodEdit(food: Food): void {
+  fillFoodForm(food)
+  editingFood.value = food
+  deletingFood.value = null
+  foodFeedback.value = ''
+  foodError.value = ''
+}
+
+function cancelFoodEdit(): void {
+  editingFood.value = null
+  foodError.value = ''
+}
+
+function askFoodDelete(food: Food): void {
+  deletingFood.value = food
+  editingFood.value = null
+  foodFeedback.value = ''
+  foodError.value = ''
+}
+
+function cancelFoodDelete(): void {
+  deletingFood.value = null
+}
+
+async function saveFoodEdit(): Promise<void> {
+  if (!editingFood.value || foodSaving.value) return
+
+  const name = foodForm.name.trim()
+  const per100g: Totals = {
+    kcal: numberField(foodForm.kcal),
+    protein: numberField(foodForm.protein),
+    carbs: numberField(foodForm.carbs),
+    fat: numberField(foodForm.fat),
+    fiber: numberField(foodForm.fiber),
+    sugar: numberField(foodForm.sugar),
+    salt: numberField(foodForm.salt),
+  }
+  if (!name) {
+    foodError.value = "Il nome dell'alimento è obbligatorio."
+    return
+  }
+  if (Object.values(per100g).some((value) => !Number.isFinite(value) || value < 0)) {
+    foodError.value = 'I valori per 100 g devono essere numeri non negativi.'
+    return
+  }
+
+  foodSaving.value = true
+  foodError.value = ''
+  try {
+    const response = await apiFetch(`/api/foods/${editingFood.value.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, per100g }),
+    })
+    if (!response.ok) {
+      const body = (await response.json().catch(() => null)) as { error?: string } | null
+      foodError.value = body?.error ?? 'Salvataggio non riuscito. Riprova.'
+      return
+    }
+    editingFood.value = null
+    foodFeedback.value = 'Preferito aggiornato.'
+    emit('favoritesChanged')
+  } catch {
+    foodError.value = 'Impossibile contattare il server.'
+  } finally {
+    foodSaving.value = false
+  }
+}
+
+async function confirmFoodDelete(): Promise<void> {
+  if (!deletingFood.value || foodSaving.value) return
+
+  foodSaving.value = true
+  foodError.value = ''
+  try {
+    const response = await apiFetch(`/api/foods/${deletingFood.value.id}`, { method: 'DELETE' })
+    if (!response.ok) {
+      foodError.value = 'Eliminazione non riuscita. Riprova.'
+      return
+    }
+    deletingFood.value = null
+    foodFeedback.value = 'Preferito eliminato. I pasti già registrati non cambiano.'
+    emit('favoritesChanged')
+  } catch {
+    foodError.value = 'Impossibile contattare il server.'
+  } finally {
+    foodSaving.value = false
+  }
 }
 
 function occurredAtForSave(): string {
@@ -300,22 +414,45 @@ const gramsInputClass =
           </div>
 
           <div v-if="filteredFavorites.length" class="space-y-2">
-            <button
+            <div
               v-for="food in filteredFavorites"
               :key="food.id"
-              type="button"
-              class="flex w-full items-center justify-between rounded-xl border border-border bg-card px-3 py-2.5 text-left"
-              @click="addFavorite(food)"
+              data-testid="favorite-row"
+              class="flex items-center gap-1 rounded-xl border border-border bg-card pr-1"
             >
-              <span class="min-w-0">
-                <span class="block truncate text-sm">{{ food.name }}</span>
-                <span class="block text-xs text-muted-foreground">
-                  {{ food.brand ?? (food.source === 'manual' ? 'Manuale' : food.source.toUpperCase()) }}
-                  · {{ formatKcal(food.per100g.kcal) }} kcal/100 g
+              <button
+                type="button"
+                class="flex min-w-0 flex-1 items-center justify-between gap-2 px-3 py-2.5 text-left"
+                @click="addFavorite(food)"
+              >
+                <span class="min-w-0">
+                  <span class="block truncate text-sm">{{ food.name }}</span>
+                  <span class="block text-xs text-muted-foreground">
+                    {{ food.brand ?? (food.source === 'manual' ? 'Manuale' : food.source.toUpperCase()) }}
+                    · {{ formatKcal(food.per100g.kcal) }} kcal/100 g
+                  </span>
                 </span>
-              </span>
-              <Plus class="size-4 text-muted-foreground" aria-hidden="true" />
-            </button>
+                <Plus class="size-4 text-muted-foreground" aria-hidden="true" />
+              </button>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                type="button"
+                :aria-label="`Modifica preferito ${food.name}`"
+                @click="openFoodEdit(food)"
+              >
+                <Pencil />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                type="button"
+                :aria-label="`Elimina preferito ${food.name}`"
+                @click="askFoodDelete(food)"
+              >
+                <Trash2 />
+              </Button>
+            </div>
           </div>
 
           <p v-else class="rounded-xl border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
@@ -331,6 +468,80 @@ const gramsInputClass =
           >
             Crea alimento
           </Button>
+
+          <p v-if="foodFeedback" role="status" class="text-sm text-muted-foreground">
+            {{ foodFeedback }}
+          </p>
+          <p v-if="foodError" role="alert" class="text-sm text-destructive">{{ foodError }}</p>
+
+          <section
+            v-if="editingFood"
+            data-testid="edit-food"
+            class="space-y-3 rounded-xl border border-border bg-card p-3"
+          >
+            <p class="text-sm font-semibold">Modifica alimento</p>
+            <div class="space-y-1.5">
+              <Label for="edit-food-name">Nome</Label>
+              <Input id="edit-food-name" v-model="foodForm.name" />
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div class="space-y-1.5">
+                <Label for="edit-food-kcal">Kcal / 100 g</Label>
+                <Input id="edit-food-kcal" v-model="foodForm.kcal" type="number" inputmode="decimal" min="0" step="any" />
+              </div>
+              <div class="space-y-1.5">
+                <Label for="edit-food-protein">Proteine / 100 g</Label>
+                <Input id="edit-food-protein" v-model="foodForm.protein" type="number" inputmode="decimal" min="0" step="any" />
+              </div>
+              <div class="space-y-1.5">
+                <Label for="edit-food-carbs">Carboidrati / 100 g</Label>
+                <Input id="edit-food-carbs" v-model="foodForm.carbs" type="number" inputmode="decimal" min="0" step="any" />
+              </div>
+              <div class="space-y-1.5">
+                <Label for="edit-food-fat">Grassi / 100 g</Label>
+                <Input id="edit-food-fat" v-model="foodForm.fat" type="number" inputmode="decimal" min="0" step="any" />
+              </div>
+              <div class="space-y-1.5">
+                <Label for="edit-food-fiber">Fibre / 100 g</Label>
+                <Input id="edit-food-fiber" v-model="foodForm.fiber" type="number" inputmode="decimal" min="0" step="any" />
+              </div>
+              <div class="space-y-1.5">
+                <Label for="edit-food-sugar">Zuccheri / 100 g</Label>
+                <Input id="edit-food-sugar" v-model="foodForm.sugar" type="number" inputmode="decimal" min="0" step="any" />
+              </div>
+              <div class="space-y-1.5">
+                <Label for="edit-food-salt">Sale / 100 g</Label>
+                <Input id="edit-food-salt" v-model="foodForm.salt" type="number" inputmode="decimal" min="0" step="any" />
+              </div>
+            </div>
+            <div class="flex gap-2">
+              <Button type="button" data-testid="save-food-edit" :disabled="foodSaving" @click="saveFoodEdit">
+                Salva
+              </Button>
+              <Button type="button" variant="ghost" @click="cancelFoodEdit">Annulla</Button>
+            </div>
+          </section>
+
+          <section
+            v-if="deletingFood"
+            data-testid="confirm-delete-food"
+            class="space-y-2 rounded-xl border border-destructive/40 p-3"
+          >
+            <p class="text-sm">Eliminare "{{ deletingFood.name }}" dai preferiti?</p>
+            <p class="text-xs text-muted-foreground">I pasti già registrati non cambiano.</p>
+            <div class="flex gap-2">
+              <Button
+                type="button"
+                variant="destructive"
+                data-testid="confirm-delete-food-button"
+                :disabled="foodSaving"
+                @click="confirmFoodDelete"
+              >
+                Elimina
+              </Button>
+              <Button type="button" variant="ghost" @click="cancelFoodDelete">Annulla</Button>
+            </div>
+          </section>
         </section>
 
         <section v-if="creating" class="space-y-3 rounded-xl border border-border bg-card p-3">

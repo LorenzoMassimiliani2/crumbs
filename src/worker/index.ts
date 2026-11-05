@@ -1,6 +1,7 @@
 import { verifyGoogleIdToken, type GoogleClaims } from './auth'
 import type { Env } from './env'
 import { exportDiary } from './export'
+import { createFood, deleteFood, updateFood } from './foods'
 import { createMeal, deleteMeal, getDay, listFoods, updateMeal } from './meals'
 import { parseProfile, profileFromRow } from './profile'
 
@@ -173,6 +174,21 @@ const routes: ApiRoute[] = [
     method: 'GET',
     pattern: /^\/api\/export$/,
     handler: (request, env, userId) => exportDiary(request, env, userId),
+  },
+  {
+    method: 'POST',
+    pattern: /^\/api\/foods$/,
+    handler: (request, env, userId) => createFood(request, env, userId),
+  },
+  {
+    method: 'PATCH',
+    pattern: /^\/api\/foods\/([^/]+)$/,
+    handler: (request, env, userId, [id]) => updateFood(request, env, userId, id!),
+  },
+  {
+    method: 'DELETE',
+    pattern: /^\/api\/foods\/([^/]+)$/,
+    handler: (_request, env, userId, [id]) => deleteFood(env, userId, id!),
   },
 ]
 

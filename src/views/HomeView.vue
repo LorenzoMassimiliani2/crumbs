@@ -289,5 +289,6 @@ onMounted(() => {
     @close="closeAdd"
     @saved="afterChange"
     @deleted="afterChange"
+    @favorites-changed="loadFavorites"
   />
 </template>

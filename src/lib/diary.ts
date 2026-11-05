@@ -19,6 +19,8 @@ export interface Food {
   source: FoodSource
   sourceId: string | null
   per100g: Totals
+  servingG?: number | null
+  servingLabel?: string | null
   lastUsedAt: string | null
 }
 
