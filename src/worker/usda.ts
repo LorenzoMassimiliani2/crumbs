@@ -6,18 +6,35 @@ const SEARCH_URL = 'https://api.nal.usda.gov/fdc/v1/foods/search'
 const SEARCH_TTL_MS = 7 * 24 * 60 * 60 * 1000
 const MAX_RESULTS = 10
 
-const ENERGY_IDS = [208, 957]
-const PROTEIN_ID = 203
-const CARBS_ID = 205
-const FAT_ID = 204
-const FIBER_ID = 291
-const SUGAR_IDS = [269, 269.3]
-const SODIUM_ID = 307
+interface NutrientSpec {
+  /** Legacy nutrient numbers, as returned in `nutrientNumber` by the search endpoint. */
+  numbers: string[]
+  /** Numeric ids, for food-detail payloads and older fixtures. */
+  ids: number[]
+}
+
+const ENERGY_KCAL: NutrientSpec = { numbers: ['208', '957'], ids: [1008, 2047, 208, 957] }
+const ENERGY_KJ: NutrientSpec = { numbers: ['268'], ids: [1062, 268] }
+const PROTEIN: NutrientSpec = { numbers: ['203'], ids: [1003, 203] }
+const CARBS: NutrientSpec = { numbers: ['205'], ids: [1005, 205] }
+const FAT: NutrientSpec = { numbers: ['204'], ids: [1004, 204] }
+const FIBER: NutrientSpec = { numbers: ['291'], ids: [1079, 291] }
+const SUGAR: NutrientSpec = { numbers: ['269', '269.3'], ids: [2000, 269, 269.3] }
+const SODIUM: NutrientSpec = { numbers: ['307'], ids: [1093, 307] }
 const SODIUM_TO_SALT = 0.0025
 
 interface RawNutrient {
   nutrientId?: unknown
+  /** Legacy number, e.g. "208". The search endpoint returns it; the detail endpoint nests it under nutrient.number. */
+  nutrientNumber?: unknown
+  /** The search endpoint returns `value`; the food-detail endpoint returns `amount`. */
+  value?: unknown
   amount?: unknown
+}
+
+interface NutrientIndex {
+  byNumber: Map<string, number>
+  byId: Map<number, number>
 }
 
 interface RawFood {
@@ -47,23 +64,36 @@ function round(value: number, digits = 2): number {
   return Math.round(value * factor) / factor
 }
 
-function nutrientMap(foodNutrients: unknown): Map<number, number> {
-  const map = new Map<number, number>()
-  if (!Array.isArray(foodNutrients)) return map
+function nutrientMap(foodNutrients: unknown): NutrientIndex {
+  const byNumber = new Map<string, number>()
+  const byId = new Map<number, number>()
+  if (!Array.isArray(foodNutrients)) return { byNumber, byId }
   for (const item of foodNutrients) {
     if (item === null || typeof item !== 'object') continue
     const nutrient = item as RawNutrient
     const id = numberOrNull(nutrient.nutrientId)
-    const amount = numberOrNull(nutrient.amount)
-    if (id === null || amount === null || map.has(id)) continue
-    map.set(id, amount)
+    const rawNumber = nutrient.nutrientNumber
+    const number =
+      typeof rawNumber === 'string'
+        ? rawNumber.trim()
+        : typeof rawNumber === 'number'
+          ? String(rawNumber)
+          : null
+    const amount = numberOrNull(nutrient.value ?? nutrient.amount)
+    if (amount === null) continue
+    if (number !== null && number !== '' && !byNumber.has(number)) byNumber.set(number, amount)
+    if (id !== null && !byId.has(id)) byId.set(id, amount)
   }
-  return map
+  return { byNumber, byId }
 }
 
-function firstAmount(map: Map<number, number>, ids: number[]): number | null {
-  for (const id of ids) {
-    const amount = map.get(id)
+function nutrientAmount(nutrients: NutrientIndex, spec: NutrientSpec): number | null {
+  for (const number of spec.numbers) {
+    const amount = nutrients.byNumber.get(number)
+    if (amount !== undefined) return amount
+  }
+  for (const id of spec.ids) {
+    const amount = nutrients.byId.get(id)
     if (amount !== undefined) return amount
   }
   return null
@@ -75,24 +105,26 @@ function normalize(raw: RawFood): SearchFood | null {
   if (fdcId === null || !name) return null
 
   const nutrients = nutrientMap(raw.foodNutrients)
-  const energy = firstAmount(nutrients, ENERGY_IDS)
+  const energyKcal = nutrientAmount(nutrients, ENERGY_KCAL)
+  const energyKj = nutrientAmount(nutrients, ENERGY_KJ)
+  const energy = energyKcal ?? (energyKj === null ? null : energyKj / 4.184)
   if (energy === null) return null
 
-  const protein = nutrients.get(PROTEIN_ID)
-  const carbs = nutrients.get(CARBS_ID)
-  const fat = nutrients.get(FAT_ID)
-  const fiber = nutrients.get(FIBER_ID)
-  const sugar = firstAmount(nutrients, SUGAR_IDS)
-  const sodium = nutrients.get(SODIUM_ID)
+  const protein = nutrientAmount(nutrients, PROTEIN)
+  const carbs = nutrientAmount(nutrients, CARBS)
+  const fat = nutrientAmount(nutrients, FAT)
+  const fiber = nutrientAmount(nutrients, FIBER)
+  const sugar = nutrientAmount(nutrients, SUGAR)
+  const sodium = nutrientAmount(nutrients, SODIUM)
 
   const per100g: ItemNutrition = {
     kcal: round(energy, 1),
-    protein: protein === undefined ? null : round(protein, 2),
-    carbs: carbs === undefined ? null : round(carbs, 2),
-    fat: fat === undefined ? null : round(fat, 2),
-    fiber: fiber === undefined ? null : round(fiber, 2),
+    protein: protein === null ? null : round(protein, 2),
+    carbs: carbs === null ? null : round(carbs, 2),
+    fat: fat === null ? null : round(fat, 2),
+    fiber: fiber === null ? null : round(fiber, 2),
     sugar: sugar === null ? null : round(sugar, 2),
-    salt: sodium === undefined ? null : round(sodium * SODIUM_TO_SALT, 2),
+    salt: sodium === null ? null : round(sodium * SODIUM_TO_SALT, 2),
   }
 
   const servingGrams = numberOrNull(raw.servingSize)
@@ -113,6 +145,23 @@ function normalize(raw: RawFood): SearchFood | null {
     per100g,
     serving,
   }
+}
+
+
+const PROCESSED_TERMS = [
+  'dried', 'juice', 'babyfood', 'canned', 'frozen', 'croissant', 'strudel',
+  'pie', 'sauce', 'sweetened', 'candied', 'dehydrated', 'powder',
+]
+
+function relevance(food: SearchFood, query: string): number {
+  const name = food.name.toLowerCase()
+  const needle = query.toLowerCase().trim()
+  let score = name.split(/[,\s]+/).filter(Boolean).length
+  if (name.startsWith(needle)) score -= 100
+  else if (name.includes(needle)) score -= 20
+  if (name.includes('raw')) score -= 10
+  if (PROCESSED_TERMS.some((term) => name.includes(term))) score += 25
+  return score
 }
 
 async function readCache(env: Env, key: string): Promise<CacheEntry> {
@@ -168,7 +217,7 @@ export async function searchUsdaFoods(query: string, env: Env): Promise<Response
   if (!env.USDA_API_KEY) return notConfigured()
 
   const translated = translateUsdaQuery(query)
-  const key = `usda:search:${translated.toLowerCase().replace(/\s+/g, ' ')}`
+  const key = `usda:search:v4:${translated.toLowerCase().replace(/\s+/g, ' ')}`
   const cached = await readCache(env, key)
   if (cached.state === 'fresh') return respond(cached.payload as SearchFood[])
 
@@ -188,8 +237,9 @@ export async function searchUsdaFoods(query: string, env: Env): Promise<Response
     for (const hit of hits) {
       const food = normalize((hit ?? {}) as RawFood)
       if (food) foods.push(food)
-      if (foods.length === MAX_RESULTS) break
     }
+    foods.sort((a, b) => relevance(a, translated) - relevance(b, translated))
+    foods = foods.slice(0, MAX_RESULTS)
   } catch {
     if (cached.state === 'stale') return respond(cached.payload as SearchFood[])
     return unavailable()

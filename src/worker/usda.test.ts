@@ -13,11 +13,11 @@ const APPLE = {
   fdcId: 1750340,
   description: 'Apples, raw, with skin',
   foodNutrients: [
-    { nutrientId: 208, amount: 52 },
-    { nutrientId: 203, amount: 0.26 },
-    { nutrientId: 205, amount: 13.81 },
-    { nutrientId: 204, amount: 0.17 },
-    { nutrientId: 307, amount: 240 },
+    { nutrientId: 208, value: 52 },
+    { nutrientId: 203, value: 0.26 },
+    { nutrientId: 205, value: 13.81 },
+    { nutrientId: 204, value: 0.17 },
+    { nutrientId: 307, value: 240 },
   ],
   servingSize: 100,
   servingSizeUnit: 'g',
@@ -27,14 +27,54 @@ const RICE = {
   fdcId: 168878,
   description: 'Rice, white, cooked',
   foodNutrients: [
-    { nutrientId: 208, amount: 999 },
-    { nutrientId: 957, amount: 130 },
-    { nutrientId: 203, amount: 2.69 },
-    { nutrientId: 291, amount: 0.4 },
-    { nutrientId: 269.3, amount: 0.05 },
+    { nutrientId: 208, value: 999 },
+    { nutrientId: 957, value: 130 },
+    { nutrientId: 203, value: 2.69 },
+    { nutrientId: 291, value: 0.4 },
+    { nutrientId: 269.3, value: 0.05 },
   ],
   servingSize: 1,
   servingSizeUnit: 'cup',
+}
+
+const KJ_ONLY = {
+  fdcId: 1100000,
+  description: 'Energy in kilojoules only',
+  foodNutrients: [{ nutrientId: 1062, value: 418.4 }],
+}
+
+
+const SEARCH_SHAPE_APPLE = {
+  fdcId: 1750341,
+  description: 'Apples, raw, with skin',
+  foodNutrients: [
+    { nutrientNumber: '208', value: 52 },
+    { nutrientNumber: '203', value: 0.26 },
+    { nutrientNumber: '205', value: 13.81 },
+    { nutrientNumber: '204', value: 0.17 },
+    { nutrientNumber: '291', value: 2.4 },
+    { nutrientNumber: '269.3', value: 10.39 },
+    { nutrientNumber: '307', value: 1 },
+  ],
+}
+
+
+const PROCESSED_APPLE = {
+  fdcId: 3000001,
+  description: 'Apples, dried, sulfured, uncooked',
+  foodNutrients: [{ nutrientNumber: '208', value: 250 }],
+}
+
+const RAW_APPLE = {
+  fdcId: 3000002,
+  description: 'Apples, raw, with skin',
+  foodNutrients: [{ nutrientNumber: '208', value: 52 }],
+}
+
+const AMOUNT_ONLY = {
+  fdcId: 1200000,
+  description: 'Detail shape with amount',
+  foodNutrients: [{ nutrientId: 208, amount: 100 }],
 }
 
 const APPLE_FOOD = {
@@ -140,6 +180,56 @@ describe('USDA food search', () => {
     expect(body.usda[0]!.serving).toBeNull()
   })
 
+
+  it('maps the real search shape by nutrientNumber (not by nutrientId)', async () => {
+    stubUsda({ foods: [SEARCH_SHAPE_APPLE] })
+
+    const body = (await (await call(env, '/api/foods/search?q=test&source=usda')).json()) as {
+      usda: { per100g: Record<string, number | null> }[]
+    }
+
+    expect(body.usda[0]!.per100g).toEqual({
+      kcal: 52,
+      protein: 0.26,
+      carbs: 13.81,
+      fat: 0.17,
+      fiber: 2.4,
+      sugar: 10.39,
+      salt: 0,
+    })
+  })
+
+
+  it('ranks foods whose name starts with the query above processed variants', async () => {
+    stubUsda({ foods: [PROCESSED_APPLE, RAW_APPLE] })
+
+    const body = (await (await call(env, '/api/foods/search?q=apple&source=usda')).json()) as {
+      usda: { name: string }[]
+    }
+
+    expect(body.usda.map((food) => food.name)).toEqual(['Apples, raw, with skin', 'Apples, dried, sulfured, uncooked'])
+  })
+
+  it('derives kcal from kilojoules 1062 when no kcal nutrient is present', async () => {
+    stubUsda({ foods: [KJ_ONLY] })
+
+    const body = (await (await call(env, '/api/foods/search?q=test&source=usda')).json()) as {
+      usda: { per100g: { kcal: number } }[]
+    }
+
+    expect(body.usda[0]!.per100g.kcal).toBe(100)
+  })
+
+  it('accepts the food-detail shape that uses amount instead of value', async () => {
+    stubUsda({ foods: [AMOUNT_ONLY] })
+
+    const body = (await (await call(env, '/api/foods/search?q=test&source=usda')).json()) as {
+      usda: { per100g: { kcal: number } }[]
+    }
+
+    expect(body.usda[0]!.per100g.kcal).toBe(100)
+  })
+
   it('translates an italian query with the alias map', async () => {
     stubUsda()
 
@@ -219,7 +309,7 @@ describe('USDA food search', () => {
     expect(usdaRequests()).toHaveLength(1)
 
     const row = await env.DB.prepare('SELECT payload, source FROM api_cache WHERE key = ?')
-      .bind('usda:search:apple')
+      .bind('usda:search:v4:apple')
       .first<{ payload: string; source: string }>()
     expect(row).not.toBeNull()
     expect(row!.source).toBe('usda')
@@ -230,7 +320,7 @@ describe('USDA food search', () => {
   it.each([429, 503])('serves stale cache when USDA answers %i', async (status) => {
     const stale = [{ ...APPLE_FOOD, name: 'Mela vecchia' }]
     await env.DB.prepare(
-      "INSERT INTO api_cache (key, source, payload, fetched_at) VALUES ('usda:search:apple', 'usda', ?, '2020-01-01T00:00:00.000Z')",
+      "INSERT INTO api_cache (key, source, payload, fetched_at) VALUES ('usda:search:v4:apple', 'usda', ?, '2020-01-01T00:00:00.000Z')",
     )
       .bind(JSON.stringify(stale))
       .run()
