@@ -40,8 +40,35 @@ src/
   stores/                 # store Pinia
   composables/            # composable riutilizzabili
   views/                  # pagine
+  worker/index.ts         # API del Worker (/api/*)
   lib/utils.ts            # cn()
   style.css               # Tailwind + tema shadcn
+migrations/               # migrazioni SQL di D1
+worker-configuration.d.ts # tipi generati da wrangler (npm run types)
+```
+
+## Database D1
+
+`crumbs-db` è collegato al Worker con il binding `DB` (`wrangler.jsonc`). Schema in `migrations/`.
+
+```bash
+npm run db:migrate:local    # applica le migrazioni al DB locale (.wrangler/state)
+npm run db:migrate:remote   # applica le migrazioni al DB Cloudflare
+npm run types               # rigenera worker-configuration.d.ts dopo modifiche al config
+```
+
+API disponibili:
+
+- `GET /api/health` → `{ "ok": true }`
+- `GET /api/meals` → ultimi 50 pasti non cancellati
+
+Le rotte `/api/*` sono gestite dal Worker (`assets.run_worker_first`); il resto è servito come asset statico.
+
+Sviluppo con DB e API locali:
+
+```bash
+npm run build
+npx wrangler dev
 ```
 
 ## Deploy su Cloudflare Workers
@@ -54,12 +81,14 @@ Su https://dash.cloudflare.com/ → **Workers & Pages** → **Create** → **Wor
 |---|---|
 | Production branch | `main` |
 | Build command | `npm run build` |
-| Deploy command | `npx wrangler deploy` |
+| Deploy command | `npm run deploy:ci` |
 | Preview command (non-production) | `npx wrangler versions upload` |
 
 Il token API va lasciato vuoto: Cloudflare lo genera e lo gestisce da solo quando colleghi il repo dalla dashboard.
 
 Ogni push su `main` genera un deploy di produzione; gli altri branch generano una versione di preview.
+
+`deploy:ci` applica prima le migrazioni D1 remote **solo sul branch `main`** (`WORKERS_CI_BRANCH`), poi esegue il deploy. Se una migrazione fallisce, il deploy non avviene.
 
 In locale il deploy manuale è:
 

@@ -7,7 +7,11 @@
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
     "preview": "vite preview",
-    "type-check": "vue-tsc -b"
+    "type-check": "vue-tsc -b",
+    "types": "wrangler types",
+    "db:migrate:local": "wrangler d1 migrations apply crumbs-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply crumbs-db --remote",
+    "deploy:ci": "if [ \"$WORKERS_CI_BRANCH\" = \"main\" ]; then npx wrangler d1 migrations apply crumbs-db --remote; fi && npx wrangler deploy"
   },
   "dependencies": {
     "@lucide/vue": "^1.69.0",

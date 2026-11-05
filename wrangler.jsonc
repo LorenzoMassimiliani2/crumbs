@@ -1,9 +1,19 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "crumbs",
+  "main": "src/worker/index.ts",
   "compatibility_date": "2026-11-05",
   "assets": {
     "directory": "./dist",
-    "not_found_handling": "single-page-application"
-  }
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "crumbs-db",
+      "database_id": "fd9fe9b3-38bc-43e8-9001-c15fe283dc19",
+      "migrations_dir": "migrations"
+    }
+  ]
 }
