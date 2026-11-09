@@ -1,7 +1,7 @@
 ---
 id: FEAT-0003
 title: Andamento calorico nel Diario
-status: approved
+status: merged
 branch: feat/andamento
 worktree: .worktrees/0003
 batch: 1
@@ -99,3 +99,10 @@ Spec e ticket generati da questo brief. Prossimo passo: `implement-spec` (manual
 
 - risultato merge su `orchestrator/integrate`: non-eseguito
 - note conflitto (se stop umano): —
+
+## Implementazione
+
+- Ticket 0023–0024 implementati e verificati sul branch `feat/andamento`.
+- Vista dedicata `/trend` con icona nel Diario, opzioni grafico barre/linea/target/valori.
+- Review standards + spec eseguita; finding corretti.
+- Merge su `main`: completato (`8ea99b4`).

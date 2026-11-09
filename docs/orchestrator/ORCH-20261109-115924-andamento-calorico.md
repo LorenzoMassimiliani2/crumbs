@@ -53,7 +53,7 @@ Ordine seriale: 0023 → 0024.
 | implement 0023 | completed | commit 6fb3ca2 |
 | implement 0024 | completed | commit b00c162 |
 | review | completed | finding corretti nel commit di vista dedicata |
-| merge | pending | branch `feat/andamento` pronto, decisione umana |
+| merge | completed | merge `8ea99b4` su `main` |
 
 ## Escalation
 
