@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx'
 
 import type { DiaryExport } from './export'
 import {
+  ATTIVITA_HEADERS,
   buildExportFile,
   buildExportSheets,
   buildExportWorkbook,
@@ -57,6 +58,24 @@ const DATA: DiaryExport = {
       fat: 2.65,
     },
   ],
+  activities: [
+    {
+      date: '2026-11-05',
+      name: 'Corsa',
+      startedAt: new Date(2026, 10, 5, 7, 5).toISOString(),
+      endedAt: new Date(2026, 10, 5, 7, 35).toISOString(),
+      durationMinutes: 30,
+      note: null,
+    },
+    {
+      date: '2026-11-05',
+      name: 'Camminata',
+      startedAt: new Date(2026, 10, 5, 18, 0).toISOString(),
+      endedAt: new Date(2026, 10, 5, 19, 15).toISOString(),
+      durationMinutes: 75,
+      note: 'Con il cane',
+    },
+  ],
 }
 
 const EMPTY: DiaryExport = {
@@ -65,6 +84,7 @@ const EMPTY: DiaryExport = {
   targetKcal: 2200,
   items: [],
   days: [],
+  activities: [],
 }
 
 describe('buildExportSheets', () => {
@@ -127,19 +147,30 @@ describe('buildExportSheets', () => {
     ])
   })
 
+  it('maps the activities to one row per activity with local times', () => {
+    const sheets = buildExportSheets(DATA)
+
+    expect(sheets.attivita).toEqual([
+      ATTIVITA_HEADERS,
+      ['2026-11-05', 'Corsa', '07:05', '07:35', 30, null],
+      ['2026-11-05', 'Camminata', '18:00', '19:15', 75, 'Con il cane'],
+    ])
+  })
+
   it('keeps only the headers for an empty range', () => {
     const sheets = buildExportSheets(EMPTY)
 
     expect(sheets.pasti).toEqual([PASTI_HEADERS])
     expect(sheets.giorni).toEqual([GIORNI_HEADERS])
+    expect(sheets.attivita).toEqual([ATTIVITA_HEADERS])
   })
 })
 
 describe('buildExportWorkbook', () => {
-  it('creates the two named sheets with the expected headers', async () => {
+  it('creates the three named sheets with the expected headers', async () => {
     const workbook = await buildExportWorkbook(DATA)
 
-    expect(workbook.SheetNames).toEqual(['pasti', 'giorni'])
+    expect(workbook.SheetNames).toEqual(['pasti', 'giorni', 'Attività'])
 
     const pasti = XLSX.utils.sheet_to_json<string[]>(workbook.Sheets.pasti!, { header: 1 })
     expect(pasti[0]).toEqual(PASTI_HEADERS)
@@ -148,6 +179,12 @@ describe('buildExportWorkbook', () => {
     const giorni = XLSX.utils.sheet_to_json<string[]>(workbook.Sheets.giorni!, { header: 1 })
     expect(giorni[0]).toEqual(GIORNI_HEADERS)
     expect(giorni).toHaveLength(2)
+
+    const attivita = XLSX.utils.sheet_to_json<string[]>(workbook.Sheets['Attività']!, {
+      header: 1,
+    })
+    expect(attivita[0]).toEqual(ATTIVITA_HEADERS)
+    expect(attivita).toHaveLength(3)
   })
 
   it('round-trips through an xlsx file reader', async () => {
@@ -155,7 +192,7 @@ describe('buildExportWorkbook', () => {
     expect(bytes.byteLength).toBeGreaterThan(0)
 
     const workbook = XLSX.read(bytes, { type: 'array' })
-    expect(workbook.SheetNames).toEqual(['pasti', 'giorni'])
+    expect(workbook.SheetNames).toEqual(['pasti', 'giorni', 'Attività'])
 
     const row = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets.pasti!)
     expect(row).toEqual([
@@ -193,10 +230,13 @@ describe('buildExportWorkbook', () => {
   it('produces a readable file with only the headers for an empty range', async () => {
     const workbook = XLSX.read(await buildExportFile(EMPTY), { type: 'array' })
 
-    expect(workbook.SheetNames).toEqual(['pasti', 'giorni'])
+    expect(workbook.SheetNames).toEqual(['pasti', 'giorni', 'Attività'])
     expect(XLSX.utils.sheet_to_json(workbook.Sheets.pasti!, { header: 1 })).toEqual([PASTI_HEADERS])
     expect(XLSX.utils.sheet_to_json(workbook.Sheets.giorni!, { header: 1 })).toEqual([
       GIORNI_HEADERS,
+    ])
+    expect(XLSX.utils.sheet_to_json(workbook.Sheets['Attività']!, { header: 1 })).toEqual([
+      ATTIVITA_HEADERS,
     ])
   })
 })
