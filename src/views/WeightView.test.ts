@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { clearToasts, toasts } from '@/composables/useToast'
 import { fetchStub } from '@/test/fetch'
 import { type WeightEntry } from '@/lib/weight'
 import WeightView from './WeightView.vue'
@@ -12,6 +13,7 @@ function json(entries: WeightEntry[]): Response {
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(new Date('2026-11-05T09:30:00Z'))
+  clearToasts()
 })
 
 afterEach(() => {
@@ -35,6 +37,18 @@ describe('WeightView', () => {
     expect(wrapper.get('[data-testid="weight-change"]').text()).toContain('—')
   })
 
+  it('keeps the quick form collapsed until the CTA is pressed', async () => {
+    fetchStub().intercept(/\/api\/weights/, () => json([{ date: '2026-11-05', weight: 78 }]))
+
+    const wrapper = mount(WeightView)
+    await flushPromises()
+
+    const panel = wrapper.get('[data-testid="weight-form-panel"]')
+    expect(panel.element.getAttribute('style')).toContain('display: none')
+    await wrapper.get('[data-testid="open-weight-form"]').trigger('click')
+    expect(panel.element.getAttribute('style') ?? '').not.toContain('display: none')
+  })
+
   it('shows the current weight, the last date and the change from the previous entry', async () => {
     fetchStub().intercept(/\/api\/weights/, () =>
       json([
@@ -48,7 +62,7 @@ describe('WeightView', () => {
     await flushPromises()
 
     expect(wrapper.get('[data-testid="current-weight"]').text()).toContain('78,0')
-    expect(wrapper.get('[data-testid="last-date"]').text()).toContain('5 novembre 2026')
+    expect(wrapper.get('[data-testid="last-date"]').text()).toContain('oggi')
     expect(wrapper.get('[data-testid="weight-change"]').text()).toContain('-1,5 kg')
   })
 
@@ -116,7 +130,7 @@ describe('WeightView', () => {
 
     const put = fetchStub().requests.find((request) => request.method === 'PUT')
     expect(new URL(put!.url).pathname).toBe('/api/weights/2026-10-31')
-    expect(wrapper.get('[role="alert"]').text()).toContain('tra 30 e 300')
+    expect(toasts.value.some((toast) => toast.message.includes('tra 30 e 300'))).toBe(true)
   })
 
   it('draws the loaded measurements on the chart and refreshes it after a new one', async () => {

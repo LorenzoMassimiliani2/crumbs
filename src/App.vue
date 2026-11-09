@@ -4,6 +4,7 @@ import { RouterView } from 'vue-router'
 import AccountMenu from '@/components/AccountMenu.vue'
 import BottomTabs from '@/components/BottomTabs.vue'
 import TokenGate from '@/components/TokenGate.vue'
+import ToastHost from '@/components/ToastHost.vue'
 import { identity, signOut } from '@/lib/auth'
 </script>
 
@@ -35,6 +36,7 @@ import { identity, signOut } from '@/lib/auth'
       </main>
 
       <BottomTabs />
+      <ToastHost />
     </div>
   </TokenGate>
 </template>

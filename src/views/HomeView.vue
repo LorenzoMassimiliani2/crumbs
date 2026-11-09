@@ -58,6 +58,30 @@ const dateLabel = computed(() => {
   }).format(new Date(year, month - 1, dayOfMonth))
 })
 
+const isToday = computed(() => selectedDate.value === toLocalDateString(new Date()))
+
+function goToday(): void {
+  selectedDate.value = toLocalDateString(new Date())
+}
+
+let touchStart: { x: number; y: number } | null = null
+
+function onTouchStart(event: TouchEvent): void {
+  const touch = event.changedTouches[0]
+  if (touch) touchStart = { x: touch.clientX, y: touch.clientY }
+}
+
+function onTouchEnd(event: TouchEvent): void {
+  const touch = event.changedTouches[0]
+  const start = touchStart
+  touchStart = null
+  if (!touch || !start) return
+  const dx = touch.clientX - start.x
+  const dy = touch.clientY - start.y
+  if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return
+  shiftDay(dx < 0 ? 1 : -1)
+}
+
 const totals = computed(() => day.value?.totals ?? ZERO_TOTALS)
 const macro = computed(() => macroPercent(totals.value))
 const delta = computed(() =>
@@ -206,7 +230,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="space-y-4">
+  <div data-testid="home-view" class="space-y-4" @touchstart="onTouchStart" @touchend="onTouchEnd">
     <div class="flex items-center justify-between">
       <Button
         variant="ghost"
@@ -251,6 +275,18 @@ onMounted(() => {
         @click="shiftDay(1)"
       >
         <ChevronRight />
+      </Button>
+    </div>
+
+    <div v-if="!isToday" class="flex justify-center">
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        data-testid="back-to-today"
+        @click="goToday"
+      >
+        Torna a oggi
       </Button>
     </div>
 
@@ -392,12 +428,34 @@ onMounted(() => {
       </article>
       </template>
 
-      <p
+      <div
         v-if="dayEmpty"
-        class="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground"
+        class="rounded-2xl border border-dashed border-border p-6 text-center"
       >
-        Nessun pasto o attività in questo giorno.
-      </p>
+        <p class="text-sm text-muted-foreground">Nessun pasto o attività in questo giorno.</p>
+        <div class="mt-3 flex justify-center gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            data-testid="empty-add-meal"
+            @click="chooseMeal"
+          >
+            <Utensils />
+            + Pasto
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            data-testid="empty-add-activity"
+            @click="chooseActivity"
+          >
+            <Dumbbell />
+            + Attività
+          </Button>
+        </div>
+      </div>
     </template>
   </div>
 

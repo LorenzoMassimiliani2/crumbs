@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { downloadExport } from '@/lib/export'
 import { fetchStub } from '@/test/fetch'
+import { clearToasts, toasts } from '@/composables/useToast'
 import ProfileView from './ProfileView.vue'
 
 vi.mock('@/lib/export', async (importOriginal) => {
@@ -29,6 +30,7 @@ const EMPTY_PROFILE = {
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(new Date('2026-11-05T12:00:00Z'))
+  clearToasts()
 })
 
 afterEach(() => {
@@ -78,7 +80,7 @@ describe('ProfileView', () => {
       birthDate: '1990-04-12',
       targetKcal: 2200,
     })
-    expect(wrapper.text()).toContain('Salvato')
+    expect(toasts.value.some((toast) => toast.message.includes('salvato'))).toBe(true)
   })
 
   it('shows no BMR or BMI values when the current weight is missing', async () => {
@@ -172,6 +174,6 @@ describe('ProfileView export', () => {
     expect(url.searchParams.get('to')).toBe('2026-10-31')
 
     expect(downloadExport).not.toHaveBeenCalled()
-    expect(wrapper.text()).toContain('Intervallo non valido.')
+    expect(toasts.value.some((toast) => toast.message === 'Intervallo non valido.')).toBe(true)
   })
 })

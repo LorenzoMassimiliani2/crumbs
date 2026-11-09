@@ -130,3 +130,15 @@ export function formatWeightDate(date: string): string {
     year: 'numeric',
   }).format(new Date(year, month - 1, day))
 }
+
+/** Short relative label for a measurement date: oggi, ieri, N giorni fa, else the full date. */
+export function formatRelativeWeightDate(date: string, today: string): string {
+  const day = dayNumber(date)
+  const current = dayNumber(today)
+  if (!Number.isFinite(day) || !Number.isFinite(current)) return formatWeightDate(date)
+  const diff = current - day
+  if (diff === 0) return 'oggi'
+  if (diff === 1) return 'ieri'
+  if (diff > 1 && diff < 7) return `${diff} giorni fa`
+  return formatWeightDate(date)
+}

@@ -1261,4 +1261,53 @@ describe('activity catalog management', () => {
     expect(await put.json()).toMatchObject({ activityId: 'act-yoga' })
     expect(wrapper.find('[data-testid="add-activity-flow"]').exists()).toBe(false)
   })
+  it('offers add actions on an empty day', async () => {
+    stubDay(EMPTY_DAY)
+
+    const wrapper = mount(HomeView)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Nessun pasto o attività')
+    await wrapper.get('[data-testid="empty-add-meal"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="add-meal-flow"]').exists()).toBe(true)
+  })
+
+  it('returns to today and changes day with a horizontal swipe', async () => {
+    stubDay()
+
+    const wrapper = mount(HomeView)
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="back-to-today"]').exists()).toBe(false)
+
+    const root = wrapper.get('[data-testid="home-view"]')
+    await root.trigger('touchstart', { changedTouches: [{ clientX: 240, clientY: 120 }] })
+    await root.trigger('touchend', { changedTouches: [{ clientX: 120, clientY: 125 }] })
+    await flushPromises()
+
+    const lastDayUrl = () =>
+      new URL(fetchStub().requests.filter((request) => request.url.includes('/api/days/')).at(-1)!.url)
+    expect(lastDayUrl().pathname.endsWith('/2026-11-06')).toBe(true)
+
+    await wrapper.get('[data-testid="back-to-today"]').trigger('click')
+    await flushPromises()
+    expect(lastDayUrl().pathname.endsWith('/2026-11-05')).toBe(true)
+  })
+
+  it('closes the meal flow with Escape', async () => {
+    stubDay()
+
+    const wrapper = mount(HomeView)
+    await flushPromises()
+    await openMealFlow(wrapper)
+
+    expect(wrapper.find('[data-testid="add-meal-flow"]').exists()).toBe(true)
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="add-meal-flow"]').exists()).toBe(false)
+  })
+
 })

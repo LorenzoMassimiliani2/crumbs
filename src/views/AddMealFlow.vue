@@ -18,6 +18,8 @@ import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { showToast } from '@/composables/useToast'
+import { useModal } from '@/composables/useModal'
 import { apiFetch } from '@/lib/api'
 import {
   formatKcal,
@@ -51,6 +53,9 @@ const emit = defineEmits<{
   deleted: []
   favoritesChanged: []
 }>()
+
+const dialogRoot = ref<HTMLElement | null>(null)
+useModal(dialogRoot, () => emit('close'))
 
 interface DraftItem {
   key: number
@@ -524,9 +529,11 @@ async function save(): Promise<void> {
       return
     }
 
+    showToast(editing.value ? 'Pasto aggiornato.' : 'Pasto salvato.')
     emit('saved')
   } catch {
     error.value = 'Impossibile contattare il server. La bozza è ancora qui.'
+    showToast('Impossibile contattare il server.', 'error')
   } finally {
     saving.value = false
   }
@@ -543,9 +550,11 @@ async function remove(): Promise<void> {
       error.value = 'Eliminazione non riuscita. Riprova.'
       return
     }
+    showToast('Pasto eliminato.')
     emit('deleted')
   } catch {
     error.value = 'Impossibile contattare il server.'
+    showToast('Impossibile contattare il server.', 'error')
   } finally {
     saving.value = false
   }
@@ -563,6 +572,7 @@ const macroDotClass: Record<'protein' | 'carbs' | 'fat', string> = {
 
 <template>
   <div
+    ref="dialogRoot"
     data-testid="add-meal-flow"
     class="fixed inset-0 z-40 flex justify-center bg-foreground/40"
     role="dialog"

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { showToast } from '@/composables/useToast'
 import { apiFetch } from '@/lib/api'
 import { currentMonthRange, downloadExport, type DiaryExport } from '@/lib/export'
 import { ageAt, bmi, mifflinStJeorBmr } from '@/lib/health'
@@ -29,14 +30,12 @@ const currentWeight = ref<number | null>(null)
 
 const loading = ref(true)
 const saving = ref(false)
-const message = ref('')
 const error = ref('')
 
 const initialRange = currentMonthRange()
 const exportFrom = ref(initialRange.from)
 const exportTo = ref(initialRange.to)
 const exporting = ref(false)
-const exportError = ref('')
 
 function numberOrNull(value: string | number): number | null {
   if (typeof value === 'string' && value.trim() === '') return null
@@ -86,7 +85,6 @@ async function load(): Promise<void> {
 
 async function save(): Promise<void> {
   saving.value = true
-  message.value = ''
   error.value = ''
   try {
     const response = await apiFetch('/api/profile', {
@@ -102,14 +100,14 @@ async function save(): Promise<void> {
 
     if (!response.ok) {
       const body = (await response.json().catch(() => null)) as { error?: string } | null
-      error.value = body?.error ?? 'Salvataggio non riuscito.'
+      showToast(body?.error ?? 'Salvataggio non riuscito.', 'error')
       return
     }
 
     applyProfile((await response.json()) as ProfileResponse)
-    message.value = 'Salvato.'
+    showToast('Profilo salvato.')
   } catch {
-    error.value = 'Impossibile contattare il server.'
+    showToast('Impossibile contattare il server.', 'error')
   } finally {
     saving.value = false
   }
@@ -117,18 +115,18 @@ async function save(): Promise<void> {
 
 async function exportDiary(): Promise<void> {
   exporting.value = true
-  exportError.value = ''
   try {
     const query = new URLSearchParams({ from: exportFrom.value, to: exportTo.value })
     const response = await apiFetch(`/api/export?${query}`)
     if (!response.ok) {
       const body = (await response.json().catch(() => null)) as { error?: string } | null
-      exportError.value = body?.error ?? "Esportazione non riuscita."
+      showToast(body?.error ?? 'Esportazione non riuscita.', 'error')
       return
     }
     await downloadExport((await response.json()) as DiaryExport)
+    showToast('Export pronto.')
   } catch {
-    exportError.value = 'Impossibile contattare il server.'
+    showToast('Impossibile contattare il server.', 'error')
   } finally {
     exporting.value = false
   }
@@ -138,18 +136,16 @@ onMounted(load)
 </script>
 
 <template>
-  <Card>
-    <CardHeader>
-      <CardTitle>Profilo</CardTitle>
-      <CardDescription>
-        I dati fisici alimentano solo BMR e BMI informativi. Il target kcal lo scegli tu.
-      </CardDescription>
-    </CardHeader>
+  <p v-if="loading" class="text-sm text-muted-foreground">Caricamento…</p>
+  <p v-else-if="error" role="alert" class="text-sm text-destructive">{{ error }}</p>
 
-    <CardContent>
-      <p v-if="loading" class="text-sm text-muted-foreground">Caricamento…</p>
-
-      <form v-else class="space-y-4" @submit.prevent="save">
+  <form v-else class="space-y-4" @submit.prevent="save">
+    <Card>
+      <CardHeader>
+        <CardTitle>Dati fisici</CardTitle>
+        <CardDescription>Altezza, sesso e data di nascita alimentano BMR e BMI.</CardDescription>
+      </CardHeader>
+      <CardContent class="space-y-4">
         <div class="space-y-1.5">
           <Label for="height">Altezza (cm)</Label>
           <Input
@@ -184,7 +180,15 @@ onMounted(load)
             type="date"
           />
         </div>
+      </CardContent>
+    </Card>
 
+    <Card>
+      <CardHeader>
+        <CardTitle>Obiettivo e BMR/BMI</CardTitle>
+        <CardDescription>Il target kcal lo scegli tu; BMR e BMI sono solo informativi.</CardDescription>
+      </CardHeader>
+      <CardContent class="space-y-4">
         <div class="space-y-1.5">
           <Label for="targetKcal">Target kcal</Label>
           <Input
@@ -209,38 +213,18 @@ onMounted(load)
           </div>
         </dl>
         <p class="text-xs text-muted-foreground">
-          BMR e BMI sono solo informativi e non modificano il target.
+          Il BMR è il consumo a riposo stimato; il BMI è un rapporto peso/altezza informativo.
+          Nessuno dei due modifica il target.
         </p>
 
-        <div class="flex items-center gap-3">
+        <div>
           <Button type="submit" :disabled="saving">
             {{ saving ? 'Salvataggio…' : 'Salva' }}
           </Button>
-          <p v-if="message" role="status" class="text-sm text-muted-foreground">{{ message }}</p>
-          <p v-if="error" role="alert" class="text-sm text-destructive">{{ error }}</p>
         </div>
-      </form>
-
-      <p class="mt-4 text-xs text-muted-foreground">
-        Dati da
-        <a
-          href="https://world.openfoodfacts.org"
-          target="_blank"
-          rel="noreferrer"
-          class="underline"
-        >Open Food Facts (ODbL)</a>
-      </p>
-      <p class="mt-1 text-xs text-muted-foreground">
-        Fonte alimenti semplici:
-        <a
-          href="https://fdc.nal.usda.gov"
-          target="_blank"
-          rel="noreferrer"
-          class="underline"
-        >USDA FoodData Central (CC0)</a>
-      </p>
-    </CardContent>
-  </Card>
+      </CardContent>
+    </Card>
+  </form>
 
   <Card class="mt-4">
     <CardHeader>
@@ -271,8 +255,26 @@ onMounted(load)
         >
           {{ exporting ? 'Preparazione…' : 'Esporta Excel' }}
         </Button>
-        <p v-if="exportError" role="alert" class="text-sm text-destructive">{{ exportError }}</p>
       </div>
     </CardContent>
   </Card>
+
+  <p class="mt-4 text-xs text-muted-foreground">
+    Dati da
+    <a
+      href="https://world.openfoodfacts.org"
+      target="_blank"
+      rel="noreferrer"
+      class="underline"
+    >Open Food Facts (ODbL)</a>
+  </p>
+  <p class="mt-1 text-xs text-muted-foreground">
+    Fonte alimenti semplici:
+    <a
+      href="https://fdc.nal.usda.gov"
+      target="_blank"
+      rel="noreferrer"
+      class="underline"
+    >USDA FoodData Central (CC0)</a>
+  </p>
 </template>

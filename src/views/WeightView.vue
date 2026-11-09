@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Plus } from '@lucide/vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 
 import WeightChart from '@/components/WeightChart.vue'
@@ -6,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { showToast } from '@/composables/useToast'
 import { apiFetch } from '@/lib/api'
 import { toLocalDateString } from '@/lib/diary'
 import {
@@ -13,6 +15,7 @@ import {
   MIN_WEIGHT_KG,
   formatWeight,
   formatWeightChange,
+  formatRelativeWeightDate,
   formatWeightDate,
   weightSummary,
   type WeightEntry,
@@ -21,7 +24,7 @@ import {
 const entries = ref<WeightEntry[]>([])
 const loading = ref(true)
 const saving = ref(false)
-const message = ref('')
+const formOpen = ref(false)
 const error = ref('')
 
 const today = toLocalDateString(new Date())
@@ -31,6 +34,11 @@ const form = reactive({
 })
 
 const summary = computed(() => weightSummary(entries.value))
+const changeClass = computed(() => {
+  const change = summary.value.change
+  if (change === null || change === 0) return ''
+  return change > 0 ? 'text-amber-600' : 'text-emerald-600'
+})
 const recent = computed(() => entries.value.slice(-10).reverse())
 
 async function load(): Promise<void> {
@@ -63,7 +71,6 @@ function startEdit(entry: WeightEntry): void {
   pendingEdit.value = null
   confirmingOverwrite.value = false
   confirmingDelete.value = null
-  message.value = ''
   error.value = ''
 }
 
@@ -117,7 +124,6 @@ async function commitEdit(target: WeightEntry): Promise<void> {
   if (!original) return
 
   saving.value = true
-  message.value = ''
   error.value = ''
   try {
     const response = await apiFetch(`/api/weights/${target.date}`, {
@@ -128,14 +134,14 @@ async function commitEdit(target: WeightEntry): Promise<void> {
 
     if (!response.ok) {
       const body = (await response.json().catch(() => null)) as { error?: string } | null
-      error.value = body?.error ?? 'Salvataggio non riuscito.'
+      showToast(body?.error ?? 'Salvataggio non riuscito.', 'error')
       return
     }
 
     if (target.date !== original.date) {
       const removal = await apiFetch(`/api/weights/${original.date}`, { method: 'DELETE' })
       if (!removal.ok && removal.status !== 404) {
-        error.value = 'Modifica non completata. Ricarica e riprova.'
+        showToast('Modifica non completata. Ricarica e riprova.', 'error')
         await load()
         return
       }
@@ -144,10 +150,10 @@ async function commitEdit(target: WeightEntry): Promise<void> {
     editing.value = null
     pendingEdit.value = null
     confirmingOverwrite.value = false
-    message.value = 'Misura aggiornata.'
+    showToast('Misura aggiornata.')
     await load()
   } catch {
-    error.value = 'Impossibile contattare il server.'
+    showToast('Impossibile contattare il server.', 'error')
   } finally {
     saving.value = false
   }
@@ -155,21 +161,20 @@ async function commitEdit(target: WeightEntry): Promise<void> {
 
 async function removeEntry(date: string): Promise<void> {
   saving.value = true
-  message.value = ''
   error.value = ''
   try {
     const response = await apiFetch(`/api/weights/${date}`, { method: 'DELETE' })
     if (!response.ok && response.status !== 404) {
-      error.value = 'Eliminazione non riuscita.'
+      showToast('Eliminazione non riuscita.', 'error')
       return
     }
 
     if (editing.value?.date === date) cancelEdit()
     confirmingDelete.value = null
-    message.value = 'Misura eliminata.'
+    showToast('Misura eliminata.')
     await load()
   } catch {
-    error.value = 'Impossibile contattare il server.'
+    showToast('Impossibile contattare il server.', 'error')
   } finally {
     saving.value = false
   }
@@ -183,7 +188,6 @@ async function save(): Promise<void> {
   }
 
   saving.value = true
-  message.value = ''
   error.value = ''
   try {
     const response = await apiFetch(`/api/weights/${form.date}`, {
@@ -194,15 +198,16 @@ async function save(): Promise<void> {
 
     if (!response.ok) {
       const body = (await response.json().catch(() => null)) as { error?: string } | null
-      error.value = body?.error ?? 'Salvataggio non riuscito.'
+      showToast(body?.error ?? 'Salvataggio non riuscito.', 'error')
       return
     }
 
     form.weight = ''
-    message.value = 'Salvato.'
+    formOpen.value = false
+    showToast('Misura salvata.')
     await load()
   } catch {
-    error.value = 'Impossibile contattare il server.'
+    showToast('Impossibile contattare il server.', 'error')
   } finally {
     saving.value = false
   }
@@ -228,7 +233,7 @@ onMounted(load)
         <div class="text-right">
           <p class="text-[11px] uppercase tracking-wide text-muted-foreground">Ultima misura</p>
           <p data-testid="last-date" class="text-sm font-medium">
-            {{ summary.current === null ? '—' : formatWeightDate(summary.current.date) }}
+            {{ summary.current === null ? '—' : formatRelativeWeightDate(summary.current.date, today) }}
           </p>
         </div>
       </div>
@@ -236,7 +241,11 @@ onMounted(load)
       <p data-testid="weight-change" class="mt-2 text-sm">
         <template v-if="summary.change === null">Variazione: —</template>
         <template v-else>
-          Variazione: <span class="font-medium">{{ formatWeightChange(summary.change) }}</span>
+          Variazione:
+          <span class="font-medium" :class="changeClass">
+            {{ summary.change > 0 ? '↑ ' : summary.change < 0 ? '↓ ' : ''
+            }}{{ formatWeightChange(summary.change) }}
+          </span>
         </template>
       </p>
     </section>
@@ -247,6 +256,14 @@ onMounted(load)
     <p v-if="error" role="alert" class="text-sm text-destructive">{{ error }}</p>
 
     <WeightChart v-if="entries.length > 0" :entries="entries" :today="today" />
+
+    <div v-if="!formOpen" class="flex justify-center">
+      <Button type="button" size="sm" data-testid="open-weight-form" @click="formOpen = true">
+        <Plus />
+        Aggiungi misura
+      </Button>
+    </div>
+
 
     <Card v-if="editing" data-testid="edit-weight-panel">
       <CardHeader>
@@ -329,7 +346,7 @@ onMounted(load)
       </CardContent>
     </Card>
 
-    <Card>
+    <Card v-show="formOpen" data-testid="weight-form-panel">
       <CardHeader>
         <CardTitle>Registra il peso</CardTitle>
         <CardDescription>Una misura per data: salvare la stessa data aggiorna il valore.</CardDescription>
@@ -359,7 +376,7 @@ onMounted(load)
             <Button type="submit" :disabled="saving">
               {{ saving ? 'Salvataggio…' : 'Salva' }}
             </Button>
-            <p v-if="message" role="status" class="text-sm text-muted-foreground">{{ message }}</p>
+            <Button type="button" variant="ghost" @click="formOpen = false">Annulla</Button>
           </div>
         </form>
       </CardContent>

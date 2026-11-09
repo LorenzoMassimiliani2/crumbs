@@ -13,6 +13,8 @@ import {
   type Activity,
   type DayActivity,
 } from '@/lib/activity'
+import { showToast } from '@/composables/useToast'
+import { useModal } from '@/composables/useModal'
 import { apiFetch } from '@/lib/api'
 
 const props = defineProps<{
@@ -25,6 +27,9 @@ const emit = defineEmits<{
   saved: []
   deleted: []
 }>()
+
+const dialogRoot = ref<HTMLElement | null>(null)
+useModal(dialogRoot, () => emit('close'))
 
 const MAX_NOTE = 500
 const MAX_NAME = 80
@@ -298,9 +303,11 @@ async function save(): Promise<void> {
       error.value = body?.error ?? 'Salvataggio non riuscito. Riprova.'
       return
     }
+    showToast(editing.value ? 'Attività aggiornata.' : 'Attività salvata.')
     emit('saved')
   } catch {
     error.value = 'Impossibile contattare il server.'
+    showToast('Impossibile contattare il server.', 'error')
   } finally {
     saving.value = false
   }
@@ -319,9 +326,11 @@ async function remove(): Promise<void> {
       error.value = 'Eliminazione non riuscita. Riprova.'
       return
     }
+    showToast('Attività eliminata.')
     emit('deleted')
   } catch {
     error.value = 'Impossibile contattare il server.'
+    showToast('Impossibile contattare il server.', 'error')
   } finally {
     saving.value = false
   }
@@ -332,6 +341,7 @@ onMounted(loadCatalog)
 
 <template>
   <div
+    ref="dialogRoot"
     data-testid="add-activity-flow"
     class="fixed inset-0 z-40 flex justify-center bg-foreground/40"
     role="dialog"
