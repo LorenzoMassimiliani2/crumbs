@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronLeft, ChevronRight, Dumbbell, Pencil, Plus, Utensils } from '@lucide/vue'
+import { CalendarDays, ChevronLeft, ChevronRight, Dumbbell, Pencil, Plus, Utensils } from '@lucide/vue'
 import { computed, onMounted, ref, watch } from 'vue'
 
 import { Button } from '@/components/ui/button'
@@ -21,6 +21,14 @@ import AddActivityFlow from './AddActivityFlow.vue'
 import AddMealFlow from './AddMealFlow.vue'
 
 const selectedDate = ref(toLocalDateString(new Date()))
+const datePicker = ref<HTMLInputElement | null>(null)
+
+function openDatePicker(): void {
+  const input = datePicker.value
+  if (!input) return
+  if (typeof input.showPicker === 'function') input.showPicker()
+  else input.click()
+}
 const day = ref<Day | null>(null)
 const favorites = ref<Food[]>([])
 const loading = ref(true)
@@ -214,12 +222,23 @@ onMounted(() => {
         <span data-testid="day-label" class="text-sm font-medium capitalize">
           {{ dateLabel }}
         </span>
+        <button
+          type="button"
+          aria-label="Scegli data"
+          class="inline-flex size-8 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+          @click="openDatePicker"
+        >
+          <CalendarDays class="size-4" />
+        </button>
         <input
+          ref="datePicker"
           :value="selectedDate"
           data-testid="day-picker"
           aria-label="Scegli data"
           type="date"
-          class="h-8 rounded-md border border-input bg-transparent px-2 text-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          tabindex="-1"
+          aria-hidden="true"
+          class="sr-only"
           @change="pickDate"
         />
       </div>

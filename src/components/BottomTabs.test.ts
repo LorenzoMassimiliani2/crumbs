@@ -8,7 +8,7 @@ function testRouter() {
   return createRouter({
     history: createMemoryHistory(),
     routes: [
-      { path: '/', name: 'today', component: { template: '<div>Oggi</div>' } },
+      { path: '/', name: 'today', component: { template: '<div>Diario</div>' } },
       { path: '/weight', name: 'weight', component: { template: '<div>Peso</div>' } },
       { path: '/profile', name: 'profile', component: { template: '<div>Profilo</div>' } },
     ],
@@ -16,7 +16,7 @@ function testRouter() {
 }
 
 describe('BottomTabs', () => {
-  it('shows Peso, Oggi and Profilo in order and marks Oggi by default', async () => {
+  it('shows Peso, Diario and Profilo in order and marks Diario by default', async () => {
     const router = testRouter()
     await router.push('/')
     await router.isReady()
@@ -24,7 +24,7 @@ describe('BottomTabs', () => {
     const wrapper = mount(BottomTabs, { global: { plugins: [router] } })
     const links = wrapper.findAll('a')
 
-    expect(links.map((link) => link.text())).toEqual(['Peso', 'Oggi', 'Profilo'])
+    expect(links.map((link) => link.text())).toEqual(['Peso', 'Diario', 'Profilo'])
     expect(links[1]!.attributes('aria-current')).toBe('page')
     expect(links[0]!.attributes('aria-current')).toBeUndefined()
     expect(links[2]!.attributes('aria-current')).toBeUndefined()
