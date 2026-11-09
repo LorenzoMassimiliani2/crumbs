@@ -94,3 +94,5 @@ Fuori scope:
   - rationale: "14 giorni che terminano oggi" e variazione con una richiesta; ricaricare dopo un pasto evita un trend stantio senza moltiplicare le chiamate.
   - alternatives_rejected: ricaricare a ogni cambio giorno (inutile: il trend non dipende dal giorno selezionato); una richiesta per giorno (escluso dal ticket).
   - evidence: test HomeView "loads the 28-day interval with one request and renders the day view" (from `2026-10-09` a `2026-11-05` con "oggi" al 5 novembre).
+
+| L'andamento vive in una vista dedicata `/trend`, aperta da un'icona nel riepilogo del Diario, invece di una sezione collassabile | Richiesta dell'utente in review: il trend è un contenuto a sé e non deve allungare il Diario; l'icona lo rende raggiungibile in un tocco | Sezione collassabile dentro Diario; nuova tab in basso | `TrendView.vue`, route `/trend`, icona `open-trend` in `HomeView.vue` |

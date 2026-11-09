@@ -1,4 +1,5 @@
 import { sumTotals } from '../lib/diary'
+import { dayNumber } from '../lib/stats'
 import type { Env } from './env'
 import { isRealDate, mealsByDate } from './meals'
 
@@ -13,13 +14,6 @@ export interface StatsDay {
 export interface StatsResponse {
   targetKcal: number | null
   days: StatsDay[]
-}
-
-const DAY_MS = 86_400_000
-
-function dayNumber(date: string): number {
-  const [year, month, day] = date.split('-').map(Number) as [number, number, number]
-  return Date.UTC(year, month - 1, day) / DAY_MS
 }
 
 function badRequest(error: string): Response {

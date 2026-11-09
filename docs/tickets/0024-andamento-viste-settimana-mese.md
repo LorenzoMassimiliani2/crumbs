@@ -80,3 +80,8 @@ Fuori scope:
   - rationale: dodici mesi consecutivi non ripetono il nome del mese, quindi l'abbreviazione è univoca; il limite esistente evita sovrapposizioni su telefono.
   - alternatives_rejected: etichette su ogni barra (sovrapposte a 320 px); etichetta completa "novembre 2026" sull'asse (troppo larga).
   - evidence: `formatMonthShort`, `slotLabels`; test "formats week and month periods" e il test esistente sulle etichette di 14 giorni.
+
+| La vista scelta vive in un composable di modulo condiviso da Diario e Andamento | La review ha rilevato che un ref dentro HomeView si azzerava uscendo dalla pagina: la memoria di sessione richiesta vale tra le viste | Persistenza su localStorage; stato nel router | `src/composables/trendState.ts`; test di cambio vista in `TrendView.test.ts` |
+| La media del periodo usa la somma delle kcal dei giorni registrati, non la somma delle medie arrotondate dei bucket | La review ha rilevato una differenza fino a ~1 kcal rispetto alla media reale dichiarata | Sommare le medie arrotondate dei bucket | `kcalSum` nei bucket e `assembleTrend`; test della media settimanale |
+| Barre centrate sullo slot ed etichette X allineate al centro della barra | La review ha rilevato uno scostamento fino a ~7 px tra barra ed etichetta | Lasciare il bordo sinistro dello slot | `x = (slot + (1 - BAR_SHARE)/2) / slots` in `assembleTrend` |
+| La variazione compare anche quando la media precedente è 0, mostrando il delta in kcal | La review ha rilevato che la condizione `previousAverage > 0` nascondeva il confronto pur con giorni registrati in entrambi i periodi | Mostrare sempre la percentuale; nascondere il confronto | `changeKcal` nel modello e fallback in `CalorieTrend.vue` |

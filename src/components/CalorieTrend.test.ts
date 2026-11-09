@@ -21,18 +21,6 @@ function mountTrend(stats: Stats = STATS, view: TrendView = 'day') {
 }
 
 describe('CalorieTrend', () => {
-  it('starts expanded and can be collapsed', async () => {
-    const wrapper = mountTrend()
-
-    expect(wrapper.get('[data-testid="trend-toggle"]').attributes('aria-expanded')).toBe('true')
-    expect(wrapper.find('svg[role="group"]').exists()).toBe(true)
-
-    await wrapper.get('[data-testid="trend-toggle"]').trigger('click')
-
-    expect(wrapper.get('[data-testid="trend-toggle"]').attributes('aria-expanded')).toBe('false')
-    expect(wrapper.find('svg[role="group"]').exists()).toBe(false)
-  })
-
   it('renders one bar per day with meals and an accessible tooltip for each', () => {
     const wrapper = mountTrend()
     const bars = wrapper.findAll('[data-testid="trend-bar"]')

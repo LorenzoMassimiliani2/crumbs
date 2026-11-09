@@ -57,11 +57,6 @@ export function addMonths(date: string, offset: number): string {
   return new Date(Date.UTC(year, month - 1 + offset, 1)).toISOString().slice(0, 10)
 }
 
-/** The interval that covers the current day view and the 14 days before it. */
-export function trendRange(today: string): { from: string; to: string } {
-  return trendRangeFor('day', today)
-}
-
 /**
  * The single interval that covers the current period of a view and the period
  * right before it, so the chart and its variation arrive with one request.
@@ -124,7 +119,9 @@ export interface TrendModel {
   recordedDays: number
   /** Days elapsed in the current period, today included. */
   totalDays: number
-  /** Percentage change against the previous period, null without both periods. */
+  /** Difference in average kcal against the previous period, null without both periods. */
+  changeKcal: number | null
+  /** Percentage change against the previous period, null when not computable. */
   changePercent: number | null
   /** Text of the comparison, null when the change is not shown. */
   changeLabel: string | null
@@ -139,7 +136,10 @@ interface Bucket {
   date: string
   slot: number
   label: string
+  /** Value drawn by the bar: day kcal or rounded average of the period. */
   kcal: number
+  /** Sum of the daily kcal used for the exact period average. */
+  kcalSum: number
   meals: number
   recordedDays: number
 }
@@ -193,6 +193,7 @@ export function buildDayTrend(stats: Stats, today: string): TrendModel {
         slot,
         label: `${formatTrendDate(day.date)}: ${formatKcal(day.kcal)} kcal, ${meals}`,
         kcal: day.kcal,
+        kcalSum: day.kcal,
         meals: day.meals,
         recordedDays: 1,
       },
@@ -210,6 +211,54 @@ export function buildDayTrend(stats: Stats, today: string): TrendModel {
   )
 }
 
+/** Buckets calendar periods (weeks or months) using the same shape. */
+function buildCalendarTrend(
+  view: 'week' | 'month',
+  stats: Stats,
+  today: string,
+  starts: string[],
+  previousStarts: string[],
+  daysOf: (start: string) => string[],
+  slotLabels: string[],
+  keyOf: (start: string) => string,
+  tooltip: (start: string, kcal: number, recordedDays: number) => string,
+): TrendModel {
+  const byDate = new Map(stats.days.map((day) => [day.date, day]))
+  const buckets = starts.flatMap((start, slot): Bucket[] => {
+    const summary = summarize(daysOf(start), byDate)
+    if (summary.recordedDays === 0) return []
+    const kcal = Math.round(summary.kcal / summary.recordedDays)
+    return [
+      {
+        key: keyOf(start),
+        date: start,
+        slot,
+        label: tooltip(start, kcal, summary.recordedDays),
+        kcal,
+        kcalSum: summary.kcal,
+        meals: summary.meals,
+        recordedDays: summary.recordedDays,
+      },
+    ]
+  })
+
+  const previousDays = previousStarts.flatMap((start) => daysOf(start))
+
+  return assembleTrend(
+    view,
+    starts,
+    slotLabels,
+    buckets,
+    stats.targetKcal,
+    summarize(previousDays, byDate),
+    dayNumber(today) - dayNumber(starts[0]!) + 1,
+  )
+}
+
+function recordedLabel(days: number): string {
+  return days === 1 ? '1 giorno registrato' : `${days} giorni registrati`
+}
+
 /** Buckets the aggregated days into the 8 calendar weeks ending with the current one. */
 function buildWeekTrend(stats: Stats, today: string): TrendModel {
   const currentStart = startOfWeek(today)
@@ -219,37 +268,18 @@ function buildWeekTrend(stats: Stats, today: string): TrendModel {
   const previousStarts = Array.from({ length: TREND_WEEKS }, (_, index) =>
     addDays(currentStart, -7 * (TREND_WEEKS + index)),
   )
-  const byDate = new Map(stats.days.map((day) => [day.date, day]))
 
-  const buckets = starts.flatMap((start, slot): Bucket[] => {
-    const summary = summarize(weekDays(start, today), byDate)
-    if (summary.recordedDays === 0) return []
-    const kcal = Math.round(summary.kcal / summary.recordedDays)
-    const daysLabel =
-      summary.recordedDays === 1 ? '1 giorno registrato' : `${summary.recordedDays} giorni registrati`
-    return [
-      {
-        key: start,
-        date: start,
-        slot,
-        label: `Settimana ${formatWeekRange(start)}: ${formatKcal(kcal)} kcal di media, ${daysLabel}`,
-        kcal,
-        meals: summary.meals,
-        recordedDays: summary.recordedDays,
-      },
-    ]
-  })
-
-  const previousDays = previousStarts.flatMap((start) => weekDays(start, today))
-
-  return assembleTrend(
+  return buildCalendarTrend(
     'week',
+    stats,
+    today,
     starts,
+    previousStarts,
+    (start) => weekDays(start, today),
     starts.map(formatTrendDay),
-    buckets,
-    stats.targetKcal,
-    summarize(previousDays, byDate),
-    dayNumber(today) - dayNumber(starts[0]!) + 1,
+    (start) => start,
+    (start, kcal, recordedDays) =>
+      `Settimana ${formatWeekRange(start)}: ${formatKcal(kcal)} kcal di media, ${recordedLabel(recordedDays)}`,
   )
 }
 
@@ -262,37 +292,18 @@ function buildMonthTrend(stats: Stats, today: string): TrendModel {
   const previousStarts = Array.from({ length: TREND_MONTHS }, (_, index) =>
     addMonths(currentStart, index - (TREND_MONTHS * 2 - 1)),
   )
-  const byDate = new Map(stats.days.map((day) => [day.date, day]))
 
-  const buckets = starts.flatMap((start, slot): Bucket[] => {
-    const summary = summarize(monthDays(start, today), byDate)
-    if (summary.recordedDays === 0) return []
-    const kcal = Math.round(summary.kcal / summary.recordedDays)
-    const daysLabel =
-      summary.recordedDays === 1 ? '1 giorno registrato' : `${summary.recordedDays} giorni registrati`
-    return [
-      {
-        key: start.slice(0, 7),
-        date: start,
-        slot,
-        label: `${formatMonthLabel(start)}: ${formatKcal(kcal)} kcal di media, ${daysLabel}`,
-        kcal,
-        meals: summary.meals,
-        recordedDays: summary.recordedDays,
-      },
-    ]
-  })
-
-  const previousDays = previousStarts.flatMap((start) => monthDays(start, today))
-
-  return assembleTrend(
+  return buildCalendarTrend(
     'month',
+    stats,
+    today,
     starts,
+    previousStarts,
+    (start) => monthDays(start, today),
     starts.map(formatMonthShort),
-    buckets,
-    stats.targetKcal,
-    summarize(previousDays, byDate),
-    dayNumber(today) - dayNumber(starts[0]!) + 1,
+    (start) => start.slice(0, 7),
+    (start, kcal, recordedDays) =>
+      `${formatMonthLabel(start)}: ${formatKcal(kcal)} kcal di media, ${recordedLabel(recordedDays)}`,
   )
 }
 
@@ -337,14 +348,15 @@ function assembleTrend(
   totalDays: number,
 ): TrendModel {
   const recordedDays = buckets.reduce((sum, bucket) => sum + bucket.recordedDays, 0)
-  const currentKcal = buckets.reduce((sum, bucket) => sum + bucket.kcal * bucket.recordedDays, 0)
+  const currentKcal = buckets.reduce((sum, bucket) => sum + bucket.kcalSum, 0)
   const averageKcal = recordedDays === 0 ? null : Math.round(currentKcal / recordedDays)
   const previousAverageKcal =
     previous.recordedDays === 0 ? null : Math.round(previous.kcal / previous.recordedDays)
-
+  const changeKcal =
+    averageKcal !== null && previousAverageKcal !== null ? averageKcal - previousAverageKcal : null
   const changePercent =
-    averageKcal !== null && previousAverageKcal !== null && previousAverageKcal > 0
-      ? Math.round(((averageKcal - previousAverageKcal) / previousAverageKcal) * 100)
+    changeKcal !== null && previousAverageKcal !== null && previousAverageKcal > 0
+      ? Math.round((changeKcal / previousAverageKcal) * 100)
       : null
 
   const peak = Math.max(targetKcal ?? 0, ...buckets.map((bucket) => bucket.kcal), 1)
@@ -359,7 +371,7 @@ function assembleTrend(
     meals: bucket.meals,
     recordedDays: bucket.recordedDays,
     slot: bucket.slot,
-    x: bucket.slot / slots,
+    x: (bucket.slot + (1 - BAR_SHARE) / 2) / slots,
     width: BAR_SHARE / slots,
     height: bucket.kcal / yMax,
   }))
@@ -377,8 +389,9 @@ function assembleTrend(
     previousAverageKcal,
     recordedDays,
     totalDays,
+    changeKcal,
     changePercent,
-    changeLabel: changePercent === null ? null : CHANGE_LABELS[view],
+    changeLabel: changeKcal === null ? null : CHANGE_LABELS[view],
     emptyLabel: EMPTY_LABELS[view],
     chartLabel: chartLabel(view, bars.length),
   }
@@ -404,11 +417,11 @@ function chartLabel(view: TrendView, count: number): string {
  * Picks at most `maxLabels` slots, spreading them from the last one backwards so the
  * gaps are never smaller than one step: the X labels cannot overlap.
  */
-export function axisLabelIndices(slots: number, maxLabels = MAX_LABELS): number[] {
+export function axisLabelIndices(slots: number): number[] {
   if (slots <= 0) return []
-  if (slots <= maxLabels) return Array.from({ length: slots }, (_, index) => index)
+  if (slots <= MAX_LABELS) return Array.from({ length: slots }, (_, index) => index)
 
-  const step = Math.ceil((slots - 1) / (maxLabels - 1))
+  const step = Math.ceil((slots - 1) / (MAX_LABELS - 1))
   const indices: number[] = []
   for (let index = slots - 1; index >= 0; index -= step) indices.unshift(index)
   return indices

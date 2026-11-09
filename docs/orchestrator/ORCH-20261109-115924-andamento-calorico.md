@@ -2,7 +2,7 @@
 id: ORCH-20261109-115924
 work: FEAT-0003
 type: feature
-status: in-progress
+status: completed
 contract: {discovery: skip, to-features: skip, to-spec: skip, to-tickets: skip, implement: delegated, review: delegated, merge: user-owned}
 phases: [implement, review, merge]
 ---
@@ -50,11 +50,24 @@ Ordine seriale: 0023 → 0024.
 | Fase | Stato | Note |
 |---|---|---|
 | plan | completed | feature, spec, ticket, ORCH |
-| implement 0023 | in corso | subagent impl-0023 |
-| implement 0024 | pending | |
-| review | pending | |
-| merge | pending | user-owned |
+| implement 0023 | completed | commit 6fb3ca2 |
+| implement 0024 | completed | commit b00c162 |
+| review | completed | finding corretti nel commit di vista dedicata |
+| merge | pending | branch `feat/andamento` pronto, decisione umana |
 
 ## Escalation
 
 Stop e richiesta umana su: cambio scope, decisioni architetturali non coperte, conflitti difficili, due fallimenti consecutivi sullo stesso ticket, operazioni distruttive.
+
+## Review
+
+- Standards: test tautologico sostituito con letterale; duplicazione settimana/mese estratta in un builder condiviso; `dayNumber` importato dalla lib nel Worker; rimosso `trendRange`; geometria barre/etichette allineata.
+- Spec: memoria della vista spostata in un composable di modulo (sopravvive al cambio pagina); media del periodo calcolata sulle kcal grezze; variazione mostrata anche con media precedente 0 (delta in kcal); errore `/api/stats` esplicito nella vista.
+- Cambio richiesto dall'utente in review: l'Andamento è una vista dedicata `/trend` aperta da un'icona nel riepilogo del Diario, non una sezione collassabile.
+
+## Verifica finale
+
+- branch `feat/andamento`
+- `npm test`: 356/356 verdi
+- `npm run type-check`: verde
+- `npm run build`: verde

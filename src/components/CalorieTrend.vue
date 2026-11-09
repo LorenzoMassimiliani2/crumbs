@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { ChevronDown } from '@lucide/vue'
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 
 import { formatKcal, formatNumber } from '@/lib/diary'
 import { buildTrend, type Stats, type TrendBar, type TrendView } from '@/lib/stats'
@@ -14,7 +13,6 @@ const VIEW_OPTIONS: { value: TrendView; label: string }[] = [
   { value: 'month', label: 'Mese' },
 ]
 
-const open = ref(true)
 const model = computed(() => buildTrend(props.stats, props.view, props.today))
 
 const WIDTH = 320
@@ -37,11 +35,16 @@ const targetY = computed(() =>
 )
 
 const changeLabel = computed(() => {
-  const change = model.value.changePercent
   const suffix = model.value.changeLabel
-  if (change === null || suffix === null) return ''
-  const sign = change > 0 ? '+' : ''
-  return `${sign}${formatNumber(change)}% ${suffix}`
+  if (suffix === null) return ''
+  const percent = model.value.changePercent
+  if (percent === null) {
+    const delta = model.value.changeKcal ?? 0
+    const sign = delta > 0 ? '+' : ''
+    return `${sign}${formatKcal(delta)} kcal ${suffix}`
+  }
+  const sign = percent > 0 ? '+' : ''
+  return `${sign}${formatNumber(percent)}% ${suffix}`
 })
 
 const selectable = computed(() => props.view === 'day')
@@ -57,29 +60,12 @@ function choose(view: TrendView): void {
 </script>
 
 <template>
-  <section data-testid="trend-section" class="rounded-2xl border border-border bg-card">
-    <button
-      type="button"
-      data-testid="trend-toggle"
-      class="flex w-full cursor-pointer items-center justify-between gap-3 px-4 py-3 text-left"
-      :aria-expanded="open"
-      aria-controls="trend-body"
-      @click="open = !open"
-    >
-      <span class="text-sm font-medium">Andamento</span>
-      <ChevronDown
-        class="size-4 text-muted-foreground transition-transform"
-        :class="open ? 'rotate-180' : ''"
-        aria-hidden="true"
-      />
-    </button>
-
-    <div v-if="open" id="trend-body" class="px-4 pb-4">
+  <section data-testid="trend-section" class="rounded-2xl border border-border bg-card p-4">
       <div
         data-testid="trend-views"
         role="group"
         aria-label="Vista dell'andamento"
-        class="mb-3 inline-flex rounded-lg bg-muted p-1"
+        class="mb-3 flex w-full rounded-lg bg-muted p-1"
       >
         <button
           v-for="option in VIEW_OPTIONS"
@@ -87,7 +73,7 @@ function choose(view: TrendView): void {
           type="button"
           :data-testid="`trend-view-${option.value}`"
           :aria-pressed="view === option.value"
-          class="cursor-pointer rounded-md px-3 py-1 text-xs font-medium transition-colors"
+          class="flex-1 cursor-pointer rounded-md px-3 py-1.5 text-center text-xs font-medium transition-colors"
           :class="
             view === option.value
               ? 'bg-card text-foreground shadow-sm'
@@ -215,9 +201,8 @@ function choose(view: TrendView): void {
         </svg>
       </div>
 
-      <p v-else data-testid="trend-empty" class="text-sm text-muted-foreground">
-        {{ model.emptyLabel }}
-      </p>
-    </div>
+    <p v-else data-testid="trend-empty" class="text-sm text-muted-foreground">
+      {{ model.emptyLabel }}
+    </p>
   </section>
 </template>

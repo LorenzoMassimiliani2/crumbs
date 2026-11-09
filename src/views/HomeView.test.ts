@@ -1,8 +1,11 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { RouterLinkStub, config, flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { pendingTrendDate } from '@/composables/trendState'
 import { fetchStub } from '@/test/fetch'
 import HomeView from './HomeView.vue'
+
+config.global.stubs = { RouterLink: RouterLinkStub }
 
 const PER_100G = { kcal: 356, protein: 12, carbs: 70, fat: 1.5, fiber: 3, sugar: 2, salt: 1 }
 const TOTALS = { kcal: 534, protein: 18, carbs: 105, fat: 2.25, fiber: 4.5, sugar: 3, salt: 1.5 }
@@ -1312,96 +1315,24 @@ describe('activity catalog management', () => {
 
 })
 
-const STATS = {
-  targetKcal: 2200,
-  days: [
-    { date: '2026-10-28', kcal: 1900, meals: 2 },
-    { date: '2026-11-01', kcal: 2100, meals: 3 },
-    { date: '2026-11-03', kcal: 1800, meals: 1 },
-  ],
-}
-
-function stubStats(stats: unknown = STATS): void {
-  fetchStub().intercept(/\/api\/stats/, () => Response.json(stats))
-}
-
-describe('calorie trend section', () => {
-  it('loads the 28-day interval with one request and renders the day view', async () => {
+describe('trend entry point', () => {
+  it('opens the dedicated trend view from the summary', async () => {
     stubDay()
-    stubStats()
 
     const wrapper = mount(HomeView)
     await flushPromises()
 
-    const statsRequests = fetchStub().requests.filter((request) => request.url.includes('/api/stats'))
-    expect(statsRequests).toHaveLength(1)
-    const url = new URL(statsRequests[0]!.url)
-    expect(url.searchParams.get('from')).toBe('2026-10-09')
-    expect(url.searchParams.get('to')).toBe('2026-11-05')
-
-    expect(wrapper.find('[data-testid="trend-section"]').exists()).toBe(true)
-    expect(wrapper.findAll('[data-testid="trend-bar"]')).toHaveLength(3)
-    expect(wrapper.get('[data-testid="trend-recorded"]').text()).toBe('3 su 14')
+    expect(wrapper.findComponent(RouterLinkStub).props('to')).toBe('/trend')
   })
 
-  it('selects the day of a tapped bar and reloads the diary', async () => {
-    fetchStub().intercept(/\/api\/days\//, (request) =>
-      Response.json({ ...EMPTY_DAY, date: request.url.split('/').pop() }),
-    )
-    fetchStub().intercept(/\/api\/foods$/, () => Response.json(FAVORITES))
-    stubStats()
+  it('opens the day chosen in the trend view', async () => {
+    pendingTrendDate.value = '2026-11-03'
+    stubDay()
 
     const wrapper = mount(HomeView)
-    await flushPromises()
-
-    const bar = wrapper
-      .findAll('[data-testid="trend-bar"]')
-      .find((item) => item.attributes('aria-label')!.startsWith('3 novembre'))!
-    await bar.trigger('click')
     await flushPromises()
 
     expect(wrapper.get('[data-testid="day-label"]').text()).toContain('3')
-    const dayRequests = fetchStub().requests.filter(
-      (request) => request.method === 'GET' && request.url.includes('/api/days/'),
-    )
-    expect(new URL(dayRequests.at(-1)!.url).pathname).toBe('/api/days/2026-11-03')
-  })
-
-  it('switches view with one request per period and remembers the choice', async () => {
-    stubDay()
-    stubStats()
-
-    const wrapper = mount(HomeView)
-    await flushPromises()
-
-    await wrapper.get('[data-testid="trend-view-week"]').trigger('click')
-    await flushPromises()
-
-    let statsRequests = fetchStub().requests.filter((request) => request.url.includes('/api/stats'))
-    expect(statsRequests).toHaveLength(2)
-    let url = new URL(statsRequests.at(-1)!.url)
-    expect(url.searchParams.get('from')).toBe('2026-07-20')
-    expect(url.searchParams.get('to')).toBe('2026-11-05')
-    expect(wrapper.get('[data-testid="trend-view-week"]').attributes('aria-pressed')).toBe('true')
-
-    await wrapper.get('[data-testid="trend-view-month"]').trigger('click')
-    await flushPromises()
-
-    statsRequests = fetchStub().requests.filter((request) => request.url.includes('/api/stats'))
-    expect(statsRequests).toHaveLength(3)
-    url = new URL(statsRequests.at(-1)!.url)
-    expect(url.searchParams.get('from')).toBe('2024-12-01')
-    expect(url.searchParams.get('to')).toBe('2026-11-05')
-    expect(wrapper.get('[data-testid="trend-view-month"]').attributes('aria-pressed')).toBe('true')
-  })
-
-  it('shows the empty state when the last 14 days have no meals', async () => {
-    stubDay()
-    stubStats({ targetKcal: null, days: [{ date: '2026-09-01', kcal: 1500, meals: 1 }] })
-
-    const wrapper = mount(HomeView)
-    await flushPromises()
-
-    expect(wrapper.get('[data-testid="trend-empty"]').text()).toContain('Nessun giorno con pasti')
+    expect(pendingTrendDate.value).toBeNull()
   })
 })

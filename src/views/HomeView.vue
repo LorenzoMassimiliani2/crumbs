@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { CalendarDays, ChevronLeft, ChevronRight, Dumbbell, Pencil, Plus, Utensils } from '@lucide/vue'
+import { CalendarDays, ChartNoAxesColumn, ChevronLeft, ChevronRight, Dumbbell, Pencil, Plus, Utensils } from '@lucide/vue'
 import { computed, onMounted, ref, watch } from 'vue'
+import { RouterLink } from 'vue-router'
 
 import { Button } from '@/components/ui/button'
 import { formatDuration, type DayActivity } from '@/lib/activity'
@@ -16,13 +17,13 @@ import {
   type FoodSource,
 } from '@/lib/diary'
 import { MEAL_TYPE_LABELS } from '@/lib/meal-types'
+import { pendingTrendDate } from '@/composables/trendState'
 import { apiFetch } from '@/lib/api'
-import { trendRangeFor, type Stats, type TrendView } from '@/lib/stats'
-import CalorieTrend from '@/components/CalorieTrend.vue'
 import AddActivityFlow from './AddActivityFlow.vue'
 import AddMealFlow from './AddMealFlow.vue'
 
-const selectedDate = ref(toLocalDateString(new Date()))
+const selectedDate = ref(pendingTrendDate.value ?? toLocalDateString(new Date()))
+pendingTrendDate.value = null
 const datePicker = ref<HTMLInputElement | null>(null)
 
 function openDatePicker(): void {
@@ -32,9 +33,6 @@ function openDatePicker(): void {
   else input.click()
 }
 const day = ref<Day | null>(null)
-const stats = ref<Stats | null>(null)
-const trendView = ref<TrendView>('day')
-const today = computed(() => toLocalDateString(new Date()))
 const favorites = ref<Food[]>([])
 const loading = ref(true)
 const error = ref('')
@@ -118,16 +116,6 @@ async function loadDay(): Promise<void> {
 }
 
 /** One request covers the current period of the view and the one before it. */
-async function loadStats(): Promise<void> {
-  const { from, to } = trendRangeFor(trendView.value, today.value)
-  try {
-    const response = await apiFetch(`/api/stats?from=${from}&to=${to}`)
-    if (response.ok) stats.value = (await response.json()) as Stats
-  } catch {
-    // The trend is a secondary section: a failure never blocks the diary.
-  }
-}
-
 async function loadFavorites(): Promise<void> {
   try {
     const response = await apiFetch('/api/foods')
@@ -146,10 +134,6 @@ function shiftDay(offset: number): void {
   const date = new Date(year, month - 1, dayOfMonth)
   date.setDate(date.getDate() + offset)
   selectedDate.value = toLocalDateString(date)
-}
-
-function selectDay(date: string): void {
-  selectedDate.value = date
 }
 
 function pickDate(event: Event): void {
@@ -199,7 +183,7 @@ function closeActivity(): void {
 
 async function afterMealChange(): Promise<void> {
   closeAdd()
-  await Promise.all([loadDay(), loadFavorites(), loadStats()])
+  await Promise.all([loadDay(), loadFavorites()])
 }
 
 async function afterActivityChange(): Promise<void> {
@@ -243,14 +227,9 @@ watch(selectedDate, () => {
   void loadDay()
 })
 
-watch(trendView, () => {
-  void loadStats()
-})
-
 onMounted(() => {
   void loadDay()
   void loadFavorites()
-  void loadStats()
 })
 </script>
 
@@ -328,13 +307,23 @@ onMounted(() => {
               <span class="text-sm font-normal text-muted-foreground">kcal</span>
             </p>
           </div>
-          <p class="text-xs text-muted-foreground tabular-nums">
-            Target
-            <span data-testid="day-target">{{
-              day.targetKcal === null ? '—' : formatKcal(day.targetKcal)
-            }}</span>
-            kcal
-          </p>
+          <div class="flex items-center gap-1">
+            <p class="text-xs text-muted-foreground tabular-nums">
+              Target
+              <span data-testid="day-target">{{
+                day.targetKcal === null ? '—' : formatKcal(day.targetKcal)
+              }}</span>
+              kcal
+            </p>
+            <RouterLink
+              to="/trend"
+              data-testid="open-trend"
+              aria-label="Apri andamento"
+              class="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <ChartNoAxesColumn class="size-4" />
+            </RouterLink>
+          </div>
         </div>
 
         <p data-testid="day-delta" class="mt-1 text-sm">
@@ -362,15 +351,6 @@ onMounted(() => {
           </div>
         </div>
       </section>
-
-      <CalorieTrend
-        v-if="stats"
-        :stats="stats"
-        :today="today"
-        :view="trendView"
-        @update:view="trendView = $event"
-        @select="selectDay"
-      />
 
       <template v-for="entry in timeline" :key="entry.key">
       <article

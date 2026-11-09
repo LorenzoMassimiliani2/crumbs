@@ -13,7 +13,6 @@ import {
   formatWeekRange,
   startOfMonth,
   startOfWeek,
-  trendRange,
   trendRangeFor,
   type Stats,
 } from './stats'
@@ -32,7 +31,7 @@ describe('date helpers', () => {
   })
 
   it('covers both the current and the previous 14 days with one interval', () => {
-    expect(trendRange(today)).toEqual({ from: '2026-10-13', to: '2026-11-09' })
+    expect(trendRangeFor('day', today)).toEqual({ from: '2026-10-13', to: '2026-11-09' })
   })
 
   it('formats dates without timezone shifts', () => {
@@ -68,8 +67,8 @@ describe('buildDayTrend', () => {
 
     expect(model.bars.map((bar) => bar.date)).toEqual(['2026-11-01', '2026-11-05'])
     expect(model.bars.map((bar) => bar.slot)).toEqual([5, 9])
-    expect(model.bars[0]!.x).toBeCloseTo(5 / 14, 6)
-    expect(model.bars[1]!.x).toBeCloseTo(9 / 14, 6)
+    expect(model.bars[0]!.x).toBeCloseTo(5.2 / 14, 6)
+    expect(model.bars[1]!.x).toBeCloseTo(9.2 / 14, 6)
     expect(model.bars[0]!.width).toBeCloseTo(0.6 / 14, 6)
   })
 
@@ -252,7 +251,7 @@ describe('buildWeekTrend', () => {
     expect(bar.kcal).toBe(2000)
     expect(bar.recordedDays).toBe(2)
     expect(bar.meals).toBe(5)
-    expect(bar.x).toBeCloseTo(6 / 8, 6)
+    expect(bar.x).toBeCloseTo(6.2 / 8, 6)
     expect(bar.width).toBeCloseTo(0.6 / 8, 6)
   })
 
@@ -338,10 +337,8 @@ describe('buildMonthTrend', () => {
     expect(bar.date).toBe('2026-11-01')
     expect(bar.kcal).toBe(2000)
     expect(bar.recordedDays).toBe(2)
-    expect(model.totalDays).toBe(
-      // Days from 1 December 2025 to today, both included.
-      Math.floor((Date.UTC(2026, 10, 9) - Date.UTC(2025, 11, 1)) / 86_400_000) + 1,
-    )
+    // Days from 1 December 2025 to 9 November 2026, both included.
+    expect(model.totalDays).toBe(344)
     expect(bar.label).toBe('Novembre 2026: 2000 kcal di media, 2 giorni registrati')
   })
 
