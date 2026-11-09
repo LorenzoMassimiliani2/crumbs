@@ -28,3 +28,6 @@ dist-ssr
 
 # ticket sync state
 .agents/tickets-state.json
+
+# git worktrees
+.worktrees/
