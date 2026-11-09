@@ -2,7 +2,7 @@
 id: ORCH-20261109-093146
 work: FEAT-0001
 type: feature
-status: in-progress
+status: completed
 contract: {discovery: skip, to-features: skip, to-spec: skip, to-tickets: skip, implement: delegated, review: delegated, merge: user-owned}
 phases: [implement, review, merge]
 ---
@@ -53,14 +53,26 @@ Ordine seriale: 0014 → 0015 → 0016 → 0017 → 0018.
 | Fase | Stato | Note |
 |---|---|---|
 | plan | completed | feature, spec, ticket, ORCH |
-| implement 0014 | pending | |
-| implement 0015 | pending | |
-| implement 0016 | pending | |
-| implement 0017 | pending | |
-| implement 0018 | pending | |
-| review | pending | |
-| merge | user-owned | |
+| implement 0014 | completed | commit 976047a, 200 test verdi |
+| implement 0015 | completed | commit 8f43a26, 210 test verdi |
+| implement 0016 | completed | commit 2426bc2, 223 test verdi |
+| implement 0017 | completed | commit 3b85166, 240 test verdi |
+| implement 0018 | completed | commit ecb96b0, 243 test verdi |
+| review | completed | standards: solo giudizi; spec: 4 finding, 3 corretti in 748f9b1, 1 accettato |
+| merge | pending | branch `feat/attivita` pronto, decisione umana |
 
 ## Escalation
 
 Stop e richiesta umana su: cambio scope, decisioni architetturali non coperte, conflitti difficili, due fallimenti consecutivi sullo stesso ticket, operazioni distruttive.
+
+## Review
+
+- Standards: nessuna violazione dura. Giudizi su test accoppiati al reload e duplicazioni (`ExportActivity` doppio, formattazione HH:MM in tre punti, `AddActivityFlow.vue` 675 righe). Rimandati come follow-up, non bloccanti.
+- Spec: 4 finding. Corretti in `748f9b1`: risemina del catalogo dopo cancellazione (flag `users.activities_seeded`), ordine 404/400 nel PATCH, aggiornamento `last_used_at` al cambio attività in modifica. Accettato: limite server di 500 caratteri sulla nota (difensivo, oltre la lettera della spec).
+
+## Verifica finale
+
+- branch `feat/attivita`, 7 commit su `main`
+- `npm test`: 245/245 verdi
+- `npm run type-check`: verde
+- `npm run build`: verde
