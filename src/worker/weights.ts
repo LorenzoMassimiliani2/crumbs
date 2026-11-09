@@ -43,8 +43,8 @@ async function seedFromProfile(env: Env, userId: string, today: string): Promise
 
   const profile = await env.DB.prepare('SELECT weight_kg FROM profiles WHERE user_id = ?')
     .bind(userId)
-    .first<{ weight_kg: number }>()
-  if (!profile) return
+    .first<{ weight_kg: number | null }>()
+  if (!profile || profile.weight_kg === null) return
 
   const now = new Date().toISOString()
   await env.DB.prepare(

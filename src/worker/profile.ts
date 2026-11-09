@@ -1,11 +1,14 @@
 export type Sex = 'm' | 'f'
 
 export interface ProfileValues {
-  weight: number
   height: number
   sex: Sex
   birthDate: string
   targetKcal: number
+}
+
+export interface ProfileResponse extends ProfileValues {
+  weight: number | null
 }
 
 export type ParsedProfile =
@@ -51,9 +54,8 @@ export function parseProfile(body: unknown, now = new Date()): ParsedProfile {
 
   const input = body as Record<string, unknown>
 
-  const weight = toNumber(input.weight)
-  if (weight === null || weight < 30 || weight > 300) {
-    return { ok: false, error: 'Il peso deve essere compreso tra 30 e 300 kg.' }
+  if ('weight' in input) {
+    return { ok: false, error: 'Il peso si registra nella sezione Peso, non nel profilo.' }
   }
 
   const height = toNumber(input.height)
@@ -78,7 +80,6 @@ export function parseProfile(body: unknown, now = new Date()): ParsedProfile {
   return {
     ok: true,
     value: {
-      weight,
       height,
       sex,
       birthDate: input.birthDate as string,
@@ -87,10 +88,12 @@ export function parseProfile(body: unknown, now = new Date()): ParsedProfile {
   }
 }
 
-export function profileFromRow(row: Record<string, unknown> | null): ProfileValues | typeof EMPTY_PROFILE {
+export function profileFromRow(
+  row: Record<string, unknown> | null,
+): ProfileResponse | typeof EMPTY_PROFILE {
   if (!row) return EMPTY_PROFILE
   return {
-    weight: row.weight as number,
+    weight: (row.weight as number | null) ?? null,
     height: row.height as number,
     sex: row.sex as Sex,
     birthDate: row.birthDate as string,

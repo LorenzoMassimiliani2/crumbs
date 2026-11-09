@@ -212,7 +212,6 @@ describe('POST /api/meals', () => {
 describe('GET /api/days/:date', () => {
   it('returns the target, day totals and non-deleted meals ordered by time', async () => {
     await call(env, 'PUT', '/api/profile', {
-      weight: 78,
       height: 178,
       sex: 'm',
       birthDate: '1990-04-12',

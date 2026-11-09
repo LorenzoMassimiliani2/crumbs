@@ -18,12 +18,14 @@ interface ProfileResponse {
 }
 
 const form = reactive({
-  weight: '' as string | number,
   height: '' as string | number,
   sex: '' as '' | 'm' | 'f',
   birthDate: '',
   targetKcal: '' as string | number,
 })
+
+// The current weight comes from the Peso section and is read-only here.
+const currentWeight = ref<number | null>(null)
 
 const loading = ref(true)
 const saving = ref(false)
@@ -43,7 +45,7 @@ function numberOrNull(value: string | number): number | null {
 }
 
 const bmr = computed(() => {
-  const weight = numberOrNull(form.weight)
+  const weight = currentWeight.value
   const height = numberOrNull(form.height)
   const age = ageAt(form.birthDate)
 
@@ -52,13 +54,13 @@ const bmr = computed(() => {
 })
 
 const bmiValue = computed(() => {
-  const weight = numberOrNull(form.weight)
+  const weight = currentWeight.value
   const height = numberOrNull(form.height)
   return weight !== null && height !== null ? bmi(weight, height) : null
 })
 
 function applyProfile(profile: ProfileResponse): void {
-  form.weight = profile.weight?.toString() ?? ''
+  currentWeight.value = profile.weight ?? null
   form.height = profile.height?.toString() ?? ''
   form.sex = profile.sex ?? ''
   form.birthDate = profile.birthDate ?? ''
@@ -91,7 +93,6 @@ async function save(): Promise<void> {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        weight: numberOrNull(form.weight),
         height: numberOrNull(form.height),
         sex: form.sex,
         birthDate: form.birthDate,
@@ -149,32 +150,17 @@ onMounted(load)
       <p v-if="loading" class="text-sm text-muted-foreground">Caricamento…</p>
 
       <form v-else class="space-y-4" @submit.prevent="save">
-        <div class="grid grid-cols-2 gap-3">
-          <div class="space-y-1.5">
-            <Label for="weight">Peso (kg)</Label>
-            <Input
-              id="weight"
-              v-model="form.weight"
-              type="number"
-              inputmode="decimal"
-              min="30"
-              max="300"
-              step="0.1"
-            />
-          </div>
-
-          <div class="space-y-1.5">
-            <Label for="height">Altezza (cm)</Label>
-            <Input
-              id="height"
-              v-model="form.height"
-              type="number"
-              inputmode="decimal"
-              min="100"
-              max="250"
-              step="0.1"
-            />
-          </div>
+        <div class="space-y-1.5">
+          <Label for="height">Altezza (cm)</Label>
+          <Input
+            id="height"
+            v-model="form.height"
+            type="number"
+            inputmode="decimal"
+            min="100"
+            max="250"
+            step="0.1"
+          />
         </div>
 
         <div class="space-y-1.5">

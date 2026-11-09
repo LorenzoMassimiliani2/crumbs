@@ -105,25 +105,26 @@ async function saveProfile(request: Request, env: Env, userId: string): Promise<
   if (!parsed.ok) return badRequest(parsed.error)
 
   const now = new Date().toISOString()
-  const { weight, height, sex, birthDate, targetKcal } = parsed.value
+  const { height, sex, birthDate, targetKcal } = parsed.value
 
+  // The profile never writes the weight: weight_kg stays the cache owned by the
+  // weight measurements (TICKET-0022).
   await env.DB.prepare(
     `INSERT INTO profiles
-       (user_id, weight_kg, height_cm, sex, birth_date, weight_updated_at, target_kcal, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       (user_id, height_cm, sex, birth_date, target_kcal, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?)
      ON CONFLICT (user_id) DO UPDATE SET
-       weight_kg = excluded.weight_kg,
        height_cm = excluded.height_cm,
        sex = excluded.sex,
        birth_date = excluded.birth_date,
-       weight_updated_at = excluded.weight_updated_at,
        target_kcal = excluded.target_kcal,
        updated_at = excluded.updated_at`,
   )
-    .bind(userId, weight, height, sex, birthDate, now, targetKcal, now)
+    .bind(userId, height, sex, birthDate, targetKcal, now)
     .run()
 
-  return Response.json(parsed.value)
+  // Answer with the full profile so the client keeps the cached current weight.
+  return readProfile(env, userId)
 }
 
 async function handleProfile(request: Request, env: Env, userId: string): Promise<Response> {

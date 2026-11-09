@@ -41,8 +41,20 @@ async function seedUser(env: Env, id = 'user-1', email = OWNER_EMAIL): Promise<v
 }
 
 async function seedProfile(env: Env, overrides: Record<string, unknown> = {}): Promise<void> {
-  const response = await call(env, 'PUT', '/api/profile', { ...PROFILE, ...overrides })
-  expect(response.status).toBe(200)
+  const values = { ...PROFILE, ...overrides }
+  await env.DB.prepare(
+    `INSERT INTO profiles
+       (user_id, weight_kg, height_cm, sex, birth_date, target_kcal, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, '2026-01-01T00:00:00.000Z')
+     ON CONFLICT (user_id) DO UPDATE SET
+       weight_kg = excluded.weight_kg,
+       height_cm = excluded.height_cm,
+       sex = excluded.sex,
+       birth_date = excluded.birth_date,
+       target_kcal = excluded.target_kcal`,
+  )
+    .bind('user-1', values.weight, values.height, values.sex, values.birthDate, values.targetKcal)
+    .run()
 }
 
 async function profileWeight(env: Env): Promise<number> {
