@@ -183,6 +183,58 @@ describe('POST /api/activity-entries', () => {
     expect(row?.last_used_at).toEqual(expect.any(String))
   })
 
+  it('accepts an end on the following day and derives the night duration', async () => {
+    const activityId = await createActivity(env, 'Corsa')
+
+    const response = await call(
+      env,
+      'POST',
+      '/api/activity-entries',
+      entryBody(activityId, {
+        startedAt: '2026-11-05T23:00:00.000Z',
+        endedAt: '2026-11-06T01:00:00.000Z',
+      }),
+    )
+    expect(response.status).toBe(201)
+
+    const entry = (await response.json()) as { durationMinutes: number; endedAt: string }
+    expect(entry.durationMinutes).toBe(120)
+    expect(entry.endedAt).toBe('2026-11-06T01:00:00.000Z')
+  })
+
+  it('accepts exactly 24 hours and rejects anything longer', async () => {
+    const activityId = await createActivity(env, 'Escursione')
+
+    const fullDay = await call(
+      env,
+      'POST',
+      '/api/activity-entries',
+      entryBody(activityId, {
+        startedAt: '2026-11-05T12:00:00.000Z',
+        endedAt: '2026-11-06T12:00:00.000Z',
+      }),
+    )
+    expect(fullDay.status).toBe(201)
+    expect(((await fullDay.json()) as { durationMinutes: number }).durationMinutes).toBe(1440)
+
+    const tooLong = await call(
+      env,
+      'POST',
+      '/api/activity-entries',
+      entryBody(activityId, {
+        startedAt: '2026-11-05T12:00:00.000Z',
+        endedAt: '2026-11-06T12:01:00.000Z',
+      }),
+    )
+    expect(tooLong.status).toBe(400)
+    expect(((await tooLong.json()) as { error: string }).error).toContain('24 ore')
+
+    const row = await env.DB.prepare(
+      'SELECT COUNT(*) AS n FROM activity_entries',
+    ).first<{ n: number }>()
+    expect(row?.n).toBe(1)
+  })
+
   it('rejects an end that is not after the start and writes nothing', async () => {
     const activityId = await createActivity(env, 'Yoga')
 

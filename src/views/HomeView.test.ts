@@ -610,7 +610,7 @@ describe('activity diary', () => {
     ])
   })
 
-  it('blocks the save with a clear message when the end is not after the start', async () => {
+  it('blocks the save with a clear message when the end equals the start', async () => {
     stubDay()
     stubActivities()
 
@@ -628,6 +628,121 @@ describe('activity diary', () => {
     expect(
       fetchStub().requests.filter((request) => request.method === 'POST'),
     ).toHaveLength(0)
+    expect(wrapper.find('[data-testid="add-activity-flow"]').exists()).toBe(true)
+  })
+
+  it('reads times past midnight as the following day and saves the night interval', async () => {
+    stubDay()
+    stubActivities()
+    fetchStub().intercept(
+      (request) => request.method === 'POST' && request.url.endsWith('/api/activity-entries'),
+      () =>
+        Response.json(
+          {
+            id: 'entry-night',
+            activityId: 'act-corsa',
+            name: 'Corsa',
+            startedAt: isoAt(23, 0),
+            endedAt: new Date(2026, 10, 6, 1, 0).toISOString(),
+            durationMinutes: 120,
+            note: null,
+          },
+          { status: 201 },
+        ),
+    )
+
+    const wrapper = mount(HomeView)
+    await flushPromises()
+    await openActivityFlow(wrapper)
+
+    await wrapper.get('[data-testid="activity-option"]').trigger('click')
+    await wrapper.get('[aria-label="Ora di inizio"]').setValue('23:00')
+    await wrapper.get('[aria-label="Ora di fine"]').setValue('01:00')
+
+    expect(wrapper.get('[data-testid="activity-duration"]').text()).toBe('2 h')
+
+    await wrapper.get('[data-testid="save-activity"]').trigger('click')
+    await flushPromises()
+
+    const post = fetchStub().requests.find(
+      (request) => request.method === 'POST' && request.url.endsWith('/api/activity-entries'),
+    )!
+    expect(await post.json()).toMatchObject({
+      startedAt: isoAt(23, 0),
+      endedAt: new Date(2026, 10, 6, 1, 0).toISOString(),
+    })
+    expect(wrapper.find('[data-testid="add-activity-flow"]').exists()).toBe(false)
+  })
+
+  it('asks for confirmation over 12 hours and saves only when confirmed', async () => {
+    stubDay()
+    stubActivities()
+    fetchStub().intercept(
+      (request) => request.method === 'POST' && request.url.endsWith('/api/activity-entries'),
+      () => Response.json({ id: 'entry-long' }, { status: 201 }),
+    )
+
+    const wrapper = mount(HomeView)
+    await flushPromises()
+    await openActivityFlow(wrapper)
+
+    await wrapper.get('[data-testid="activity-option"]').trigger('click')
+    await wrapper.get('[aria-label="Ora di inizio"]').setValue('18:00')
+    await wrapper.get('[aria-label="Ora di fine"]').setValue('08:00')
+    expect(wrapper.get('[data-testid="activity-duration"]').text()).toBe('14 h')
+
+    await wrapper.get('[data-testid="save-activity"]').trigger('click')
+    await flushPromises()
+    expect(
+      fetchStub().requests.filter((request) => request.method === 'POST'),
+    ).toHaveLength(0)
+    expect(wrapper.get('[data-testid="long-activity-confirm"]').text()).toContain('14 h')
+
+    await wrapper.get('[data-testid="cancel-long-activity"]').trigger('click')
+    expect(wrapper.find('[data-testid="long-activity-confirm"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="add-activity-flow"]').exists()).toBe(true)
+    expect(
+      (wrapper.get('[aria-label="Ora di inizio"]').element as HTMLInputElement).value,
+    ).toBe('18:00')
+    expect((wrapper.get('[aria-label="Ora di fine"]').element as HTMLInputElement).value).toBe(
+      '08:00',
+    )
+    expect(
+      fetchStub().requests.filter((request) => request.method === 'POST'),
+    ).toHaveLength(0)
+
+    await wrapper.get('[data-testid="save-activity"]').trigger('click')
+    await wrapper.get('[data-testid="confirm-long-activity"]').trigger('click')
+    await flushPromises()
+
+    const post = fetchStub().requests.find(
+      (request) => request.method === 'POST' && request.url.endsWith('/api/activity-entries'),
+    )!
+    expect(await post.json()).toMatchObject({ startedAt: isoAt(18, 0) })
+    expect(wrapper.find('[data-testid="add-activity-flow"]').exists()).toBe(false)
+  })
+
+  it('shows the server message and keeps the flow when the duration exceeds 24 hours', async () => {
+    stubDay()
+    stubActivities()
+    fetchStub().intercept(
+      (request) => request.method === 'POST' && request.url.endsWith('/api/activity-entries'),
+      () =>
+        Response.json(
+          { error: "La durata dell'attività non può superare le 24 ore." },
+          { status: 400 },
+        ),
+    )
+
+    const wrapper = mount(HomeView)
+    await flushPromises()
+    await openActivityFlow(wrapper)
+
+    await wrapper.get('[data-testid="activity-option"]').trigger('click')
+    await wrapper.get('[data-testid="save-activity"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('non può superare le 24 ore')
     expect(wrapper.find('[data-testid="add-activity-flow"]').exists()).toBe(true)
   })
 
@@ -756,5 +871,40 @@ describe('activity diary', () => {
 
     expect(wrapper.get('[data-testid="day-consumed"]').text()).toContain('534')
     expect(wrapper.get('[data-testid="day-target"]').text()).toContain('2200')
+  })
+
+  it('shows long and night durations in readable hours and minutes', async () => {
+    const day = {
+      ...EMPTY_DAY,
+      activities: [
+        {
+          id: 'entry-night',
+          activityId: 'act-corsa',
+          name: 'Corsa',
+          startedAt: isoAt(23, 0),
+          endedAt: new Date(2026, 10, 6, 1, 0).toISOString(),
+          durationMinutes: 120,
+          note: null,
+        },
+        {
+          id: 'entry-long',
+          activityId: 'act-camminata',
+          name: 'Camminata',
+          startedAt: isoAt(18, 0),
+          endedAt: new Date(2026, 10, 6, 8, 0).toISOString(),
+          durationMinutes: 840,
+          note: null,
+        },
+      ],
+    }
+    stubDay(day)
+
+    const wrapper = mount(HomeView)
+    await flushPromises()
+
+    const rows = wrapper.findAll('[data-testid="activity-row"]')
+    expect(rows[0]!.text()).toContain('14 h')
+    expect(rows[1]!.text()).toContain('2 h')
+    expect(rows.map((row) => row.text()).join(' ')).not.toContain('-')
   })
 })

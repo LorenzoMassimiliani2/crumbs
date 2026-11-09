@@ -1,4 +1,9 @@
-import { activityDurationMinutes, type Activity, type DayActivity } from '../lib/activity'
+import {
+  activityDurationMinutes,
+  MAX_ACTIVITY_MINUTES,
+  type Activity,
+  type DayActivity,
+} from '../lib/activity'
 import type { Env } from './env'
 import { isRealDate, toUtcInstant } from './meals'
 
@@ -165,8 +170,12 @@ export async function createActivityEntry(
   if (startedAt === null) return badRequest("L'orario di inizio non è valido.")
   const endedAt = toUtcInstant(input.endedAt)
   if (endedAt === null) return badRequest("L'orario di fine non è valido.")
-  if (Date.parse(endedAt) <= Date.parse(startedAt)) {
+  const durationMs = Date.parse(endedAt) - Date.parse(startedAt)
+  if (durationMs <= 0) {
     return badRequest("L'ora di fine deve essere successiva all'ora di inizio.")
+  }
+  if (durationMs > MAX_ACTIVITY_MINUTES * 60_000) {
+    return badRequest("La durata dell'attività non può superare le 24 ore.")
   }
 
   const note = parseNote(input.note)

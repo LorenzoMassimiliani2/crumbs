@@ -5,7 +5,13 @@ import { computed, onMounted, ref } from 'vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { activityDurationMinutes, formatDuration, type Activity } from '@/lib/activity'
+import {
+  activityDurationMinutes,
+  activityInstants,
+  formatDuration,
+  LONG_ACTIVITY_MINUTES,
+  type Activity,
+} from '@/lib/activity'
 import { apiFetch } from '@/lib/api'
 
 const props = defineProps<{ date: string }>()
@@ -60,32 +66,25 @@ const selected = computed(
   () => catalog.value.find((activity) => activity.id === selectedId.value) ?? null,
 )
 
-/** Local wall time on the selected day, turned into an ISO instant. */
-function instantFor(value: string): string | null {
-  const match = /^(\d{2}):(\d{2})$/.exec(value)
-  if (!match) return null
-  const hours = Number(match[1])
-  const minutes = Number(match[2])
-  if (hours > 23 || minutes > 59) return null
-  const [year, month, day] = props.date.split('-').map(Number) as [number, number, number]
-  return new Date(year, month - 1, day, hours, minutes).toISOString()
-}
-
-const startedAt = computed(() => instantFor(startTime.value))
-const endedAt = computed(() => instantFor(endTime.value))
-
-const durationMinutes = computed<number | null>(() => {
-  if (!startedAt.value || !endedAt.value) return null
-  return activityDurationMinutes(startedAt.value, endedAt.value)
-})
+/** ISO instants of the selected day; an end before the start falls on the next day. */
+const instants = computed(() => activityInstants(props.date, startTime.value, endTime.value))
+const startedAt = computed(() => instants.value?.startedAt ?? null)
+const endedAt = computed(() => instants.value?.endedAt ?? null)
 
 const timeError = computed(() => {
-  if (!startedAt.value || !endedAt.value) return 'Inserisci un orario valido.'
-  if (Date.parse(endedAt.value) <= Date.parse(startedAt.value)) {
+  if (!instants.value) return 'Inserisci un orario valido.'
+  if (startTime.value === endTime.value) {
     return "L'ora di fine deve essere successiva all'ora di inizio."
   }
   return ''
 })
+
+const durationMinutes = computed<number | null>(() => {
+  if (!instants.value || timeError.value) return null
+  return activityDurationMinutes(instants.value.startedAt, instants.value.endedAt)
+})
+
+const confirming = ref(false)
 
 async function loadCatalog(): Promise<void> {
   loadingCatalog.value = true
@@ -141,7 +140,7 @@ async function createActivity(): Promise<void> {
   }
 }
 
-async function save(): Promise<void> {
+function requestSave(): void {
   if (saving.value) return
   if (!selectedId.value) {
     error.value = "Scegli un'attività."
@@ -151,6 +150,20 @@ async function save(): Promise<void> {
     error.value = timeError.value
     return
   }
+  if (durationMinutes.value !== null && durationMinutes.value > LONG_ACTIVITY_MINUTES) {
+    confirming.value = true
+    return
+  }
+  void save()
+}
+
+function cancelConfirmation(): void {
+  confirming.value = false
+}
+
+async function save(): Promise<void> {
+  confirming.value = false
+  if (saving.value || !selectedId.value || !startedAt.value || !endedAt.value) return
 
   saving.value = true
   error.value = ''
@@ -333,11 +346,52 @@ onMounted(loadCatalog)
           size="lg"
           data-testid="save-activity"
           :disabled="saving"
-          @click="save"
+          @click="requestSave"
         >
           {{ saving ? 'Salvataggio…' : 'Salva attività' }}
         </Button>
       </footer>
+
+      <div
+        v-if="confirming"
+        data-testid="long-activity-confirm"
+        class="absolute inset-0 z-10 flex items-center justify-center bg-foreground/40 p-4"
+        role="alertdialog"
+        aria-modal="true"
+        aria-label="Conferma durata"
+      >
+        <div class="w-full max-w-sm rounded-2xl border border-border bg-background p-4 shadow-xl">
+          <p class="text-sm font-semibold">Durata superiore a 12 ore</p>
+          <p class="mt-1 text-sm text-muted-foreground">
+            Questa attività dura
+            <span
+              data-testid="long-activity-duration"
+              class="font-medium text-foreground tabular-nums"
+            >
+              {{ formatDuration(durationMinutes ?? 0) }}
+            </span>
+            . Vuoi salvarla?
+          </p>
+          <div class="mt-4 flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              data-testid="cancel-long-activity"
+              @click="cancelConfirmation"
+            >
+              Annulla
+            </Button>
+            <Button
+              type="button"
+              data-testid="confirm-long-activity"
+              :disabled="saving"
+              @click="save"
+            >
+              Salva comunque
+            </Button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
