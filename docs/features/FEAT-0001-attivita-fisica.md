@@ -1,7 +1,7 @@
 ---
 id: FEAT-0001
 title: Attività fisica nel diario
-status: verifying
+status: merged
 branch: feat/0001-attivita-fisica
 worktree: .worktrees/0001
 batch: 1
@@ -108,4 +108,4 @@ Spec e ticket generati da questo brief. Prossimo passo: `implement-spec` (manual
 
 - Ticket 0014–0018 implementati e verificati sul branch `feat/attivita`.
 - Review standards + spec eseguita; finding corretti in `748f9b1`.
-- Merge su `main`: user-owned, in attesa.
+- Merge su `main`: completato (c7226a2).

@@ -59,7 +59,7 @@ Ordine seriale: 0014 → 0015 → 0016 → 0017 → 0018.
 | implement 0017 | completed | commit 3b85166, 240 test verdi |
 | implement 0018 | completed | commit ecb96b0, 243 test verdi |
 | review | completed | standards: solo giudizi; spec: 4 finding, 3 corretti in 748f9b1, 1 accettato |
-| merge | pending | branch `feat/attivita` pronto, decisione umana |
+| merge | completed | merge `c7226a2` su `main` |
 
 ## Escalation
 
