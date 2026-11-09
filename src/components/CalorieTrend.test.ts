@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 
+import { trendOptions } from '@/composables/trendState'
 import CalorieTrend from './CalorieTrend.vue'
 import type { Stats, TrendView } from '@/lib/stats'
 
@@ -15,6 +16,12 @@ const STATS: Stats = {
     { date: '2026-11-05', kcal: 2200, meals: 3 },
   ],
 }
+
+beforeEach(() => {
+  trendOptions.chart = 'bars'
+  trendOptions.showTarget = true
+  trendOptions.showValues = false
+})
 
 function mountTrend(stats: Stats = STATS, view: TrendView = 'day') {
   return mount(CalorieTrend, { props: { stats, today, view } })
@@ -171,4 +178,31 @@ describe('CalorieTrend views', () => {
       'Nessun giorno con pasti negli ultimi 12 mesi.',
     )
   })
+  it('switches between bars and line and can hide the target line', async () => {
+    const wrapper = mountTrend()
+
+    await wrapper.get('[data-testid="trend-options-toggle"]').trigger('click')
+    expect(wrapper.find('[data-testid="trend-options"]').exists()).toBe(true)
+
+    await wrapper.get('[data-testid="trend-chart-line"]').trigger('click')
+    expect(wrapper.find('[data-testid="trend-line"]').exists()).toBe(true)
+    expect(wrapper.findAll('rect[fill="currentColor"]')).toHaveLength(0)
+
+    await wrapper.get('[data-testid="trend-toggle-target"]').trigger('click')
+    expect(wrapper.find('[data-testid="trend-target-line"]').exists()).toBe(false)
+
+    await wrapper.get('[data-testid="trend-chart-bars"]').trigger('click')
+    expect(wrapper.findAll('rect[fill="currentColor"]').length).toBeGreaterThan(0)
+  })
+
+  it('shows the value above every bar on request', async () => {
+    const wrapper = mountTrend()
+
+    await wrapper.get('[data-testid="trend-options-toggle"]').trigger('click')
+    await wrapper.get('[data-testid="trend-toggle-values"]').trigger('click')
+
+    expect(wrapper.findAll('[data-testid="trend-value"]')).toHaveLength(2)
+    expect(wrapper.findAll('[data-testid="trend-value"]')[0]!.text()).toBe('1800')
+  })
+
 })

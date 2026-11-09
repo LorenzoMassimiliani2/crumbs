@@ -88,6 +88,7 @@ I dati arrivano da un unico endpoint di aggregazione per intervallo, con una sol
 - [ ] La variazione non compare se manca uno dei due periodi.
 - [ ] Un periodo senza giorni con pasti mostra uno stato vuoto al posto del grafico.
 - [ ] Il grafico è SVG, con barre, linea del target, etichette leggibili e tooltip accessibile per ogni barra.
+- [ ] Un pannello Opzioni nella vista Andamento permette di scegliere barre o linea, mostrare/nascondere la linea del target e i valori sopra le barre; le scelte restano attive durante la sessione.
 - [ ] Il tocco su una barra della vista Giorno seleziona quel giorno nel Diario e aggiorna i pasti mostrati.
 - [ ] Nelle viste Settimana e Mese il tocco non cambia il giorno selezionato.
 
