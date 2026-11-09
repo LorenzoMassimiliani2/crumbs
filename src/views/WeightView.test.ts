@@ -118,4 +118,29 @@ describe('WeightView', () => {
     expect(new URL(put!.url).pathname).toBe('/api/weights/2026-10-31')
     expect(wrapper.get('[role="alert"]').text()).toContain('tra 30 e 300')
   })
+
+  it('draws the loaded measurements on the chart and refreshes it after a new one', async () => {
+    let entries: WeightEntry[] = [
+      { date: '2026-10-01', weight: 80 },
+      { date: '2026-11-01', weight: 79 },
+    ]
+    fetchStub()
+      .intercept((request) => request.method === 'PUT', async (request) => {
+        const { weight } = (await request.json()) as { weight: number }
+        entries = [...entries, { date: '2026-11-05', weight }]
+        return Response.json(entries.at(-1))
+      })
+      .intercept(/\/api\/weights/, () => json(entries))
+
+    const wrapper = mount(WeightView)
+    await flushPromises()
+
+    expect(wrapper.findAll('circle')).toHaveLength(2)
+
+    await wrapper.get('#weight-value').setValue('78')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.findAll('circle')).toHaveLength(3)
+  })
 })

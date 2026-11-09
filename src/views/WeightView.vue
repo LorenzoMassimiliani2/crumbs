@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 
+import WeightChart from '@/components/WeightChart.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -117,6 +118,8 @@ onMounted(load)
       Nessuna misura registrata. Inserisci la prima misura per iniziare.
     </p>
     <p v-if="error" role="alert" class="text-sm text-destructive">{{ error }}</p>
+
+    <WeightChart v-if="entries.length > 0" :entries="entries" :today="today" />
 
     <Card>
       <CardHeader>
