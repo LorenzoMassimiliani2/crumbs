@@ -47,3 +47,40 @@ Fuori scope:
 - [ ] `profiles.weight_kg` segue l'ultima misura; una misura retroattiva non cambia il peso corrente.
 - [ ] Senza misure, `profiles.weight_kg` mantiene l'ultimo valore noto.
 - [ ] Le rotte del peso richiedono la credenziale e filtrano per utente; dati di altri utenti non sono visibili né modificabili.
+
+## Choices
+
+- **Migrazione additiva `0005_weight_entries.sql`**: nuova tabella `weight_entries` con `UNIQUE (user_id, measured_on)` e colonna `users.weights_seeded INTEGER NOT NULL DEFAULT 0`.
+  - rationale: una sola riga per data è garantita dal database; il flag replica il pattern già usato per il catalogo attività ed è l'unico modo per distinguere "registro mai inizializzato" da "registro svuotato".
+  - alternatives_rejected: deduplica applicativa senza vincolo (rischio di doppioni da richieste concorrenti); flag in `profiles` (il profilo può non esistere).
+  - evidence: `migrations/0005_weight_entries.sql`, test "updates the measurement of the same date without duplicating it".
+
+- **Semina su `GET /api/weights` con claim atomico del flag**: `UPDATE users SET weights_seeded = 1 WHERE id = ? AND weights_seeded = 0` precede il conteggio e l'insert; l'insert usa `INSERT OR IGNORE`.
+  - rationale: stesso schema di `listActivities`; il flag viene reclamato anche senza peso nel profilo, così un profilo compilato in seguito non fa ripartire la semina.
+  - alternatives_rejected: seminare quando il profilo viene salvato (accoppia Profilo e registro, fuori scope TICKET-0022); contare le righe senza flag (risemina dopo cancellazione).
+  - evidence: test "seeds the profile weight on today only once", "does not reseed after every measurement is deleted".
+
+- **Cache `profiles.weight_kg` aggiornata nello stesso `DB.batch` dell'upsert**, con subquery `ORDER BY measured_on DESC LIMIT 1` e `EXISTS` sulle misure.
+  - rationale: scrittura misura e cache restano atomiche; una misura retroattiva non sposta il peso corrente perché vince sempre la data massima; senza misure l'`UPDATE` non tocca la cache e resta l'ultimo valore noto.
+  - alternatives_rejected: calcolo in applicazione con due statement separati (finestra non atomica); trigger SQLite (più difficile da testare e da leggere).
+  - evidence: `src/worker/weights.ts`, test "keeps the profile weight cache on the latest measurement", "keeps the last known profile weight when no measurement remains".
+
+- **`today` validato con `isRealDate` e fallback `new Date().toISOString().slice(0, 10)`**.
+  - rationale: riusa il validatore esistente; il client manda la data locale, il server non si fida e ha un default deterministico UTC.
+  - alternatives_rejected: nuova utility di validazione data (duplicazione); rifiutare `today` non valido (il contratto chiede fallback).
+  - evidence: test "falls back to the UTC date when today is missing or not a real date".
+
+- **Vista `WeightView` con riepilogo, form e lista senza router interno**: `GET /api/weights?today=...` al mount, `PUT /api/weights/:date` al submit, ricarica dopo il salvataggio.
+  - rationale: la lista riflette subito upsert e semina; il form resta utilizzabile nello stato vuoto e la lista è sola lettura come richiesto.
+  - alternatives_rejected: aggiornamento ottimistico dello stato locale (divergerebbe dalla cache e dalla semina); stato globale Pinia (una sola vista consumatrice).
+  - evidence: `src/views/WeightView.test.ts`.
+
+- **Helper puri in `src/lib/weight.ts`** (`weightSummary`, formattazione peso/data/variazione).
+  - rationale: riepilogo e formattazione testabili senza DOM e riusabili dal grafico in TICKET-0020.
+  - alternatives_rejected: logica nel componente (non testabile al seam puro).
+  - evidence: `src/lib/weight.test.ts`.
+
+- **Tab in basso Peso | Oggi | Profilo con icone `Scale`, `House`, `UserRound`**; route `/weight` aggiunta senza cambiare il default `/`.
+  - rationale: rispetta ordine e atterraggio su Oggi; nessuna nuova dipendenza.
+  - alternatives_rejected: riordinare le route per ottenere il default (il default dipende dal path `/`, non dall'ordine).
+  - evidence: `src/components/BottomTabs.test.ts`, `src/router/index.ts`.
