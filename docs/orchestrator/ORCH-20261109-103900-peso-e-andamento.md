@@ -2,7 +2,7 @@
 id: ORCH-20261109-103900
 work: FEAT-0002
 type: feature
-status: in-progress
+status: completed
 contract: {discovery: skip, to-features: skip, to-spec: skip, to-tickets: skip, implement: delegated, review: delegated, merge: user-owned}
 phases: [implement, review, merge]
 ---
@@ -53,13 +53,25 @@ Ordine seriale: 0019 → 0020 → 0021 → 0022.
 | Fase | Stato | Note |
 |---|---|---|
 | plan | completed | feature, spec, ticket, ORCH |
-| implement 0019 | in corso | subagent impl-0019 |
-| implement 0020 | pending | |
-| implement 0021 | pending | |
-| implement 0022 | pending | |
+| implement 0019 | completed | commit 1dc2c6d |
+| implement 0020 | completed | commit a220336 |
+| implement 0021 | completed | commit bdbb4bb |
+| implement 0022 | completed | commit 819166f |
 | review | pending | |
-| merge | pending | user-owned |
+| merge | pending | branch `feat/peso` pronto, decisione umana |
 
 ## Escalation
 
 Stop e richiesta umana su: cambio scope, decisioni architetturali non coperte, conflitti difficili, due fallimenti consecutivi sullo stesso ticket, operazioni distruttive.
+
+## Review
+
+- Standards: un finding duro (migrazione 0006 non additiva rispetto ai Seams della spec, ora allineata) e giudizi su test/duplicazioni; corretti costanti condivise, nomi, tipo `pendingEdit` e campo inutilizzato.
+- Spec: 1 alto (cache profilo quando la riga profilo non esiste ancora), 1 medio (margine Y minimo 0,5 kg), 2 bassi (allineamento spec, conferma su snapshot stantio). Tutti corretti in `9698f96`.
+
+## Verifica finale
+
+- branch `feat/peso`, 5 commit su `main`
+- `npm test`: 295/295 verdi
+- `npm run type-check`: verde
+- `npm run build`: verde
