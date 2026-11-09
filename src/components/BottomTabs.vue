@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { House, UserRound } from '@lucide/vue'
+import { House, Scale, UserRound } from '@lucide/vue'
 import { RouterLink } from 'vue-router'
 
 const tabs = [
+  { to: '/weight', label: 'Peso', icon: Scale },
   { to: '/', label: 'Oggi', icon: House },
   { to: '/profile', label: 'Profilo', icon: UserRound },
 ] as const

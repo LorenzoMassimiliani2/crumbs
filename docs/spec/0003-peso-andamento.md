@@ -110,4 +110,4 @@ L'export `.xlsx` resta invariato.
 - Seam frontend: mount della vista Peso in DOM con `fetch` intercettato al confine di rete; verifica di form, lista, conferme, selettore periodo e stato vuoto. Mount della barra in basso per ordine e tab attiva; mount del Profilo per l'assenza del campo peso e la presenza di BMR/BMI.
 - Seam puro: un modulo `src/lib/weight.ts` con il modello del grafico (`weightChartModel(entries, period, today)`): filtra il periodo, calcola scala X/Y, margine e punti SVG. È il punto più alto per verificare la geometria senza DOM. Riusa `isRealDate`/formattazione date esistenti dove possibile.
 - Nessun nuovo seam per l'export: non viene toccato.
-- Le migrazioni D1 sono additive: nuova tabella `weight_entries`, nuova colonna flag su `users`, nessuna modifica distruttiva.
+- Le migrazioni D1 aggiungono `weight_entries` e il flag su `users`; TICKET-0022 ricostruisce `profiles` per rendere `weight_kg` nullable, copiando tutte le righe esistenti. È l'unico cambiamento di forma, necessario perché SQLite non rimuove `NOT NULL` in place.

@@ -318,7 +318,6 @@ describe('POST /api/activity-entries', () => {
 describe('GET /api/days/:date', () => {
   it('includes the activities of the day ordered by start and leaves totals unchanged', async () => {
     await call(env, 'PUT', '/api/profile', {
-      weight: 78,
       height: 178,
       sex: 'm',
       birthDate: '1990-04-12',
@@ -536,7 +535,6 @@ describe('PUT /api/activity-entries/:id', () => {
 
   it('recalculates the day timeline after the times change and leaves totals alone', async () => {
     await call(env, 'PUT', '/api/profile', {
-      weight: 78,
       height: 178,
       sex: 'm',
       birthDate: '1990-04-12',

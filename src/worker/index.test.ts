@@ -10,7 +10,6 @@ const OWNER_EMAIL = 'owner@example.com'
 const SERVICE_TOKEN = 'test-service-token'
 
 const VALID_PROFILE = {
-  weight: 78,
   height: 178,
   sex: 'm',
   birthDate: '1990-04-12',
@@ -205,7 +204,23 @@ describe('worker routes', () => {
 
     const read = await call(env, '/api/profile', { headers: bearer(token) })
     expect(read.status).toBe(200)
-    expect(await read.json()).toEqual(VALID_PROFILE)
+    expect(await read.json()).toEqual({ ...VALID_PROFILE, weight: null })
+  })
+
+  it('rejects a profile payload that still carries the weight', async () => {
+    const env = testEnv()
+    const identity = await installGoogleIdentity(CLIENT_ID, OWNER_EMAIL)
+    const token = await identity.sign()
+
+    const response = await call(env, '/api/profile', {
+      method: 'PUT',
+      headers: jsonAuth(token),
+      body: JSON.stringify({ ...VALID_PROFILE, weight: 78 }),
+    })
+
+    expect(response.status).toBe(400)
+    const payload = (await response.json()) as { error: string }
+    expect(payload.error).toContain('Peso')
   })
 
   it('rejects invalid profile values without writing', async () => {
@@ -220,8 +235,6 @@ describe('worker routes', () => {
     })
 
     const invalidValues: Record<string, unknown>[] = [
-      { ...VALID_PROFILE, weight: 29 },
-      { ...VALID_PROFILE, weight: 301 },
       { ...VALID_PROFILE, height: 99 },
       { ...VALID_PROFILE, height: 251 },
       { ...VALID_PROFILE, sex: 'x' },
@@ -243,7 +256,7 @@ describe('worker routes', () => {
     }
 
     const read = await call(env, '/api/profile', { headers: bearer(token) })
-    expect(await read.json()).toEqual(VALID_PROFILE)
+    expect(await read.json()).toEqual({ ...VALID_PROFILE, weight: null })
   })
 
   it('rejects a malformed profile body', async () => {

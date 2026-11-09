@@ -1,7 +1,7 @@
 ---
 id: FEAT-0002
 title: Peso e andamento
-status: approved
+status: verifying
 branch: feat/peso
 worktree: .worktrees/0002
 batch: 1
@@ -110,3 +110,9 @@ Spec e ticket generati da questo brief. Prossimo passo: `implement-spec` (manual
 
 - risultato merge su `orchestrator/integrate`: non-eseguito
 - note conflitto (se stop umano): —
+
+## Implementazione
+
+- Ticket 0019–0022 implementati e verificati sul branch `feat/peso`.
+- Review standards + spec eseguita; finding corretti in `9698f96`.
+- Merge su `main`: user-owned, in attesa.

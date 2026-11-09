@@ -42,7 +42,7 @@ describe('ProfileView', () => {
     const wrapper = mount(ProfileView)
     await flushPromises()
 
-    expect((wrapper.get('#weight').element as HTMLInputElement).value).toBe('78')
+    expect(wrapper.find('#weight').exists()).toBe(false)
     expect((wrapper.get('#height').element as HTMLInputElement).value).toBe('178')
     expect((wrapper.get('#sex').element as unknown as HTMLSelectElement).value).toBe('m')
     expect((wrapper.get('#birthDate').element as HTMLInputElement).value).toBe('1990-04-12')
@@ -63,7 +63,6 @@ describe('ProfileView', () => {
     const wrapper = mount(ProfileView)
     await flushPromises()
 
-    await wrapper.get('#weight').setValue('78')
     await wrapper.get('#height').setValue('178')
     await wrapper.get('#sex').setValue('m')
     await wrapper.get('#birthDate').setValue('1990-04-12')
@@ -73,8 +72,25 @@ describe('ProfileView', () => {
 
     const put = requests.find((request) => request.method === 'PUT')
     expect(put).toBeDefined()
-    expect(await put!.json()).toEqual(SAVED_PROFILE)
+    expect(await put!.json()).toEqual({
+      height: 178,
+      sex: 'm',
+      birthDate: '1990-04-12',
+      targetKcal: 2200,
+    })
     expect(wrapper.text()).toContain('Salvato')
+  })
+
+  it('shows no BMR or BMI values when the current weight is missing', async () => {
+    fetchStub().intercept(/\/api\/profile$/, () =>
+      Response.json({ ...SAVED_PROFILE, weight: null }),
+    )
+
+    const wrapper = mount(ProfileView)
+    await flushPromises()
+
+    const values = wrapper.findAll('dl dd').map((dd) => dd.text())
+    expect(values).toEqual(['—', '—'])
   })
 
   it('shows the Open Food Facts attribution with a link', async () => {
