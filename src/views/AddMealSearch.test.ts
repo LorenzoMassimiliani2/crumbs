@@ -1,8 +1,10 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { RouterLinkStub, config, flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { fetchStub } from '@/test/fetch'
 import HomeView from './HomeView.vue'
+
+config.global.stubs = { RouterLink: RouterLinkStub }
 
 const EMPTY_DAY = {
   date: '2026-11-05',

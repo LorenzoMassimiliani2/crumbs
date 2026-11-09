@@ -15,7 +15,7 @@ Voglio una sezione **Andamento** nella stessa pagina, con barre delle kcal e la 
 
 ## Solution
 
-Una sezione **Andamento** collassabile dentro Diario, sotto il riepilogo del giorno, aperta di default sulla vista **Giorno**.
+Una vista dedicata **Andamento**, aperta dall'icona nel riepilogo del giorno, con la vista **Giorno** attiva di default. Dalla vista si torna al Diario.
 
 - **Giorno**: 14 giorni che terminano oggi, una barra per giorno. Toccando una barra si apre quel giorno nel Diario.
 - **Settimana**: 8 settimane (lunedì–domenica) che terminano con quella corrente, una barra per settimana con la **media giornaliera** delle kcal dei giorni con pasti.
@@ -30,9 +30,9 @@ I dati arrivano da un unico endpoint di aggregazione per intervallo, con una sol
 
 ## User Stories
 
-1. Come proprietario, voglio vedere una sezione Andamento nella pagina Diario, così da confrontare i giorni senza cambiare pagina.
-2. Come proprietario, voglio poter chiudere e riaprire la sezione, così che il diario resti il contenuto principale.
-3. Come proprietario, voglio che la sezione sia aperta di default sulla vista Giorno, così da vedere subito gli ultimi giorni.
+1. Come proprietario, voglio aprire l'Andamento da un'icona nella pagina Diario, così da confrontare i giorni senza cercare un'altra tab.
+2. Come proprietario, voglio tornare al Diario dalla vista Andamento, così che il diario resti il contenuto principale.
+3. Come proprietario, voglio che la vista Andamento si apra sulla Giorno, così da vedere subito gli ultimi giorni.
 4. Come proprietario, voglio passare tra Giorno, Settimana e Mese, così da cambiare scala di osservazione.
 5. Come proprietario, voglio che la vista scelta resti attiva durante la sessione, così da non riselezionarla ogni volta.
 6. Come proprietario, voglio vedere le kcal degli ultimi 14 giorni come barre, così da confrontare giorni vicini.
@@ -74,7 +74,8 @@ I dati arrivano da un unico endpoint di aggregazione per intervallo, con una sol
 
 ### Sezione Andamento
 
-- [ ] La sezione è dentro Diario, sotto il riepilogo del giorno, collassabile e aperta di default.
+- [ ] Il riepilogo del giorno in Diario contiene un'icona che apre la vista dedicata Andamento; la vista ha un comando per tornare al Diario.
+- [ ] La vista Andamento si apre sulla Giorno di default.
 - [ ] Il selettore offre Giorno, Settimana e Mese; il default è Giorno.
 - [ ] La vista scelta resta attiva durante la sessione e non viene persistita sul database.
 - [ ] La vista Giorno mostra 14 barre, una per ciascuno degli ultimi 14 giorni che ha pasti; i giorni senza pasti non hanno barra.
@@ -87,6 +88,7 @@ I dati arrivano da un unico endpoint di aggregazione per intervallo, con una sol
 - [ ] La variazione non compare se manca uno dei due periodi.
 - [ ] Un periodo senza giorni con pasti mostra uno stato vuoto al posto del grafico.
 - [ ] Il grafico è SVG, con barre, linea del target, etichette leggibili e tooltip accessibile per ogni barra.
+- [ ] Un pannello Opzioni nella vista Andamento permette di scegliere barre o linea, mostrare/nascondere la linea del target e i valori sopra le barre; le scelte restano attive durante la sessione.
 - [ ] Il tocco su una barra della vista Giorno seleziona quel giorno nel Diario e aggiorna i pasti mostrati.
 - [ ] Nelle viste Settimana e Mese il tocco non cambia il giorno selezionato.
 
@@ -101,6 +103,6 @@ I dati arrivano da un unico endpoint di aggregazione per intervallo, con una sol
 
 - Highest seam: rotte HTTP del Worker con D1 reale e migrazioni applicate (seam esistente). Verifica aggregazione, filtri utente, giorni cancellati, conteggio pasti, target e validazioni.
 - Seam puro: `src/lib/stats.ts` con le definizioni dei periodi e `buildTrend(days, view, today)` che produce bucket, medie, conteggi e modello del grafico. È il punto più alto per verificare Giorno/Settimana/Mese, giorni mancanti, settimana corrente parziale, media e variazione senza DOM.
-- Seam frontend: mount di `HomeView` con `fetch` intercettato al confine di rete e mount del componente grafico; verifica di sezione collassabile, selettore, barre, target, riepilogo, stato vuoto e tocco che seleziona il giorno.
+- Seam frontend: mount di `HomeView` (icona di ingresso), di `TrendView` con router e `fetch` intercettato al confine di rete, e del componente grafico; verifica di selettore, barre, target, riepilogo, stato vuoto, ritorno al Diario e tocco che seleziona il giorno.
 - Nessun nuovo seam per l'export: non viene toccato.
 - Nessuna migrazione: l'aggregazione legge `meals` e `meal_items` esistenti.

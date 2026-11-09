@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { CalendarDays, ChevronLeft, ChevronRight, Dumbbell, Pencil, Plus, Utensils } from '@lucide/vue'
+import { CalendarDays, ChartNoAxesColumn, ChevronLeft, ChevronRight, Dumbbell, Pencil, Plus, Utensils } from '@lucide/vue'
 import { computed, onMounted, ref, watch } from 'vue'
+import { RouterLink } from 'vue-router'
 
 import { Button } from '@/components/ui/button'
 import { formatDuration, type DayActivity } from '@/lib/activity'
@@ -16,11 +17,13 @@ import {
   type FoodSource,
 } from '@/lib/diary'
 import { MEAL_TYPE_LABELS } from '@/lib/meal-types'
+import { pendingTrendDate } from '@/composables/trendState'
 import { apiFetch } from '@/lib/api'
 import AddActivityFlow from './AddActivityFlow.vue'
 import AddMealFlow from './AddMealFlow.vue'
 
-const selectedDate = ref(toLocalDateString(new Date()))
+const selectedDate = ref(pendingTrendDate.value ?? toLocalDateString(new Date()))
+pendingTrendDate.value = null
 const datePicker = ref<HTMLInputElement | null>(null)
 
 function openDatePicker(): void {
@@ -112,6 +115,7 @@ async function loadDay(): Promise<void> {
   }
 }
 
+/** One request covers the current period of the view and the one before it. */
 async function loadFavorites(): Promise<void> {
   try {
     const response = await apiFetch('/api/foods')
@@ -303,13 +307,23 @@ onMounted(() => {
               <span class="text-sm font-normal text-muted-foreground">kcal</span>
             </p>
           </div>
-          <p class="text-xs text-muted-foreground tabular-nums">
-            Target
-            <span data-testid="day-target">{{
-              day.targetKcal === null ? '—' : formatKcal(day.targetKcal)
-            }}</span>
-            kcal
-          </p>
+          <div class="flex items-center gap-1">
+            <p class="text-xs text-muted-foreground tabular-nums">
+              Target
+              <span data-testid="day-target">{{
+                day.targetKcal === null ? '—' : formatKcal(day.targetKcal)
+              }}</span>
+              kcal
+            </p>
+            <RouterLink
+              to="/trend"
+              data-testid="open-trend"
+              aria-label="Apri andamento"
+              class="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <ChartNoAxesColumn class="size-4" />
+            </RouterLink>
+          </div>
         </div>
 
         <p data-testid="day-delta" class="mt-1 text-sm">

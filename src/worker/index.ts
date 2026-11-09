@@ -14,6 +14,7 @@ import { createFood, deleteFood, updateFood } from './foods'
 import { createMeal, deleteMeal, getDay, listFoods, updateMeal } from './meals'
 import { getOffProduct, searchFoods } from './off'
 import { parseProfile, profileFromRow } from './profile'
+import { getStats } from './stats'
 import { deleteWeight, listWeights, upsertWeight } from './weights'
 
 type AuthContext = { kind: 'service' } | { kind: 'google'; claims: GoogleClaims }
@@ -165,6 +166,11 @@ const routes: ApiRoute[] = [
     method: 'GET',
     pattern: /^\/api\/days\/(\d{4}-\d{2}-\d{2})$/,
     handler: (_request, env, userId, [date]) => getDay(env, userId, date!),
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/stats$/,
+    handler: (request, env, userId) => getStats(request, env, userId),
   },
   {
     method: 'GET',

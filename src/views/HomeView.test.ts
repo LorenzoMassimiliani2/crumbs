@@ -1,8 +1,11 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { RouterLinkStub, config, flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { pendingTrendDate } from '@/composables/trendState'
 import { fetchStub } from '@/test/fetch'
 import HomeView from './HomeView.vue'
+
+config.global.stubs = { RouterLink: RouterLinkStub }
 
 const PER_100G = { kcal: 356, protein: 12, carbs: 70, fat: 1.5, fiber: 3, sugar: 2, salt: 1 }
 const TOTALS = { kcal: 534, protein: 18, carbs: 105, fat: 2.25, fiber: 4.5, sugar: 3, salt: 1.5 }
@@ -1310,4 +1313,26 @@ describe('activity catalog management', () => {
     expect(wrapper.find('[data-testid="add-meal-flow"]').exists()).toBe(false)
   })
 
+})
+
+describe('trend entry point', () => {
+  it('opens the dedicated trend view from the summary', async () => {
+    stubDay()
+
+    const wrapper = mount(HomeView)
+    await flushPromises()
+
+    expect(wrapper.findComponent(RouterLinkStub).props('to')).toBe('/trend')
+  })
+
+  it('opens the day chosen in the trend view', async () => {
+    pendingTrendDate.value = '2026-11-03'
+    stubDay()
+
+    const wrapper = mount(HomeView)
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="day-label"]').text()).toContain('3')
+    expect(pendingTrendDate.value).toBeNull()
+  })
 })
