@@ -119,7 +119,7 @@ export async function upsertWeight(
       ? toNumber((body as Record<string, unknown>).weight)
       : null
   if (weight === null || weight < MIN_WEIGHT_KG || weight > MAX_WEIGHT_KG) {
-    return badRequest('Il peso deve essere compreso tra 30 e 300 kg.')
+    return badRequest(`Il peso deve essere compreso tra ${MIN_WEIGHT_KG} e ${MAX_WEIGHT_KG} kg.`)
   }
 
   const now = new Date().toISOString()

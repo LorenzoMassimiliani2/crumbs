@@ -9,6 +9,8 @@ import { Label } from '@/components/ui/label'
 import { apiFetch } from '@/lib/api'
 import { toLocalDateString } from '@/lib/diary'
 import {
+  MAX_WEIGHT_KG,
+  MIN_WEIGHT_KG,
   formatWeight,
   formatWeightChange,
   formatWeightDate,
@@ -29,7 +31,7 @@ const form = reactive({
 })
 
 const summary = computed(() => weightSummary(entries.value))
-const latest = computed(() => entries.value.slice(-10).reverse())
+const recent = computed(() => entries.value.slice(-10).reverse())
 
 async function load(): Promise<void> {
   loading.value = true
@@ -50,7 +52,7 @@ async function load(): Promise<void> {
 
 const editing = ref<WeightEntry | null>(null)
 const editForm = reactive({ date: '', weight: '' as string | number })
-const pendingEdit = ref<{ date: string; weight: number } | null>(null)
+const pendingEdit = ref<WeightEntry | null>(null)
 const confirmingOverwrite = ref(false)
 const confirmingDelete = ref<string | null>(null)
 
@@ -110,7 +112,7 @@ function cancelOverwrite(): void {
  * original one. The new date goes first so a failed delete leaves a recoverable
  * duplicate instead of losing the measurement.
  */
-async function commitEdit(target: { date: string; weight: number }): Promise<void> {
+async function commitEdit(target: WeightEntry): Promise<void> {
   const original = editing.value
   if (!original) return
 
@@ -261,6 +263,7 @@ onMounted(load)
                 v-model="editForm.date"
                 data-testid="edit-weight-date"
                 type="date"
+                :disabled="confirmingOverwrite"
               />
             </div>
             <div class="space-y-1.5">
@@ -271,8 +274,9 @@ onMounted(load)
                 data-testid="edit-weight-value"
                 type="number"
                 inputmode="decimal"
-                min="30"
-                max="300"
+                :disabled="confirmingOverwrite"
+                :min="MIN_WEIGHT_KG"
+                :max="MAX_WEIGHT_KG"
                 step="0.1"
               />
             </div>
@@ -344,8 +348,8 @@ onMounted(load)
                 v-model="form.weight"
                 type="number"
                 inputmode="decimal"
-                min="30"
-                max="300"
+                :min="MIN_WEIGHT_KG"
+                :max="MAX_WEIGHT_KG"
                 step="0.1"
               />
             </div>
@@ -368,7 +372,7 @@ onMounted(load)
       <CardContent>
         <ul class="divide-y divide-border">
           <li
-            v-for="entry in latest"
+            v-for="entry in recent"
             :key="entry.date"
             data-testid="weight-entry"
             class="py-2 text-sm"

@@ -9,7 +9,6 @@ export const MAX_WEIGHT_KG = 300
 
 export interface WeightSummary {
   current: WeightEntry | null
-  previous: WeightEntry | null
   /** Difference from the previous measurement, null when there is no previous one. */
   change: number | null
 }
@@ -22,7 +21,7 @@ export function weightSummary(entries: WeightEntry[]): WeightSummary {
     current !== null && previous !== null
       ? Math.round((current.weight - previous.weight) * 10) / 10
       : null
-  return { current, previous, change }
+  return { current, change }
 }
 
 /** Periods offered by the weight chart selector, in days or the whole history. */
@@ -94,7 +93,7 @@ export function weightChartModel(
   const weights = selected.map(({ entry }) => entry.weight)
   const min = Math.min(...weights)
   const max = Math.max(...weights)
-  const padding = max > min ? (max - min) * 0.15 : 0.5
+  const padding = max > min ? Math.max((max - min) * 0.15, 0.5) : 0.5
   const yMin = min - padding
   const yMax = max + padding
 

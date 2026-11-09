@@ -80,3 +80,5 @@ Fuori scope:
   - rationale: `PUT /api/profile` rifiuta `weight` per contratto; il seeding dei test deve usare la cache come farebbe una misura.
   - alternatives_rejected: lasciare i test rossi; indebolire la validazione lato server per compatibilità.
   - evidence: `seedProfile` in `src/worker/weights.test.ts`; corpi profilo aggiornati in `src/worker/activities.test.ts` e `src/worker/meals.test.ts`.
+
+| La creazione del profilo inizializza `weight_kg` dall'ultima misura disponibile; gli aggiornamenti successivi non lo toccano | Corregge il finding della review: se la prima misura precede la riga profilo, l'UPDATE della cache toccava zero righe e il peso restava nullo | Aggiornare il peso a ogni salvataggio del profilo; lasciare il profilo senza peso finché non arriva una misura | `saveProfile` (subquery sull'ultima `measured_on` solo nell'INSERT); test "fills the profile weight when the profile is created after a measurement" |

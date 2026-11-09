@@ -11,12 +11,11 @@ describe('weightSummary', () => {
     ])
 
     expect(summary.current).toEqual({ date: '2026-11-05', weight: 78 })
-    expect(summary.previous).toEqual({ date: '2026-11-01', weight: 79.5 })
     expect(summary.change).toBe(-1.5)
   })
 
   it('has no change with fewer than two entries and handles a float-safe difference', () => {
-    expect(weightSummary([])).toEqual({ current: null, previous: null, change: null })
+    expect(weightSummary([])).toEqual({ current: null, change: null })
 
     const single = weightSummary([{ date: '2026-11-05', weight: 78 }])
     expect(single.current?.weight).toBe(78)
@@ -87,11 +86,11 @@ describe('weightChartModel', () => {
       today,
     )
 
-    expect(model.yMin).toBeCloseTo(77.7, 6)
-    expect(model.yMax).toBeCloseTo(80.3, 6)
+    expect(model.yMin).toBeCloseTo(77.5, 6)
+    expect(model.yMax).toBeCloseTo(80.5, 6)
     // The lowest and highest values sit one padding step inside the plot, not on its edges.
-    expect(model.points[0]!.y).toBeCloseTo(1 - 0.3 / 2.6, 6)
-    expect(model.points[1]!.y).toBeCloseTo(0.3 / 2.6, 6)
+    expect(model.points[0]!.y).toBeCloseTo(2.5 / 3, 6)
+    expect(model.points[1]!.y).toBeCloseTo(0.5 / 3, 6)
   })
 
   it('centres a single measurement with a readable scale', () => {

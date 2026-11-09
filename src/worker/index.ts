@@ -111,8 +111,12 @@ async function saveProfile(request: Request, env: Env, userId: string): Promise<
   // weight measurements (TICKET-0022).
   await env.DB.prepare(
     `INSERT INTO profiles
-       (user_id, height_cm, sex, birth_date, target_kcal, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?)
+       (user_id, weight_kg, height_cm, sex, birth_date, target_kcal, updated_at)
+     VALUES (
+       ?,
+       (SELECT weight_kg FROM weight_entries WHERE user_id = ? ORDER BY measured_on DESC LIMIT 1),
+       ?, ?, ?, ?, ?
+     )
      ON CONFLICT (user_id) DO UPDATE SET
        height_cm = excluded.height_cm,
        sex = excluded.sex,
@@ -120,7 +124,7 @@ async function saveProfile(request: Request, env: Env, userId: string): Promise<
        target_kcal = excluded.target_kcal,
        updated_at = excluded.updated_at`,
   )
-    .bind(userId, height, sex, birthDate, targetKcal, now)
+    .bind(userId, userId, height, sex, birthDate, targetKcal, now)
     .run()
 
   // Answer with the full profile so the client keeps the cached current weight.

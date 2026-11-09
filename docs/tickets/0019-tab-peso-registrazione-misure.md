@@ -84,3 +84,5 @@ Fuori scope:
   - rationale: rispetta ordine e atterraggio su Oggi; nessuna nuova dipendenza.
   - alternatives_rejected: riordinare le route per ottenere il default (il default dipende dal path `/`, non dall'ordine).
   - evidence: `src/components/BottomTabs.test.ts`, `src/router/index.ts`.
+
+| I limiti di peso sono esportati da `lib/weight` e usati da worker e form | La review ha rilevato 30/300 duplicati in quattro punti; un'unica costante evita divergenze | Valori letterali nei form e nel messaggio del worker | `MIN_WEIGHT_KG`/`MAX_WEIGHT_KG` importati in `weights.ts` e `WeightView.vue` |

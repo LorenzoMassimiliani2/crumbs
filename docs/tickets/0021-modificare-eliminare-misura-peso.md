@@ -81,3 +81,5 @@ Fuori scope:
   - rationale: il comportamento precedente era esplicitamente provvisorio ("la modifica e la cancellazione arrivano in TICKET-0021").
   - alternatives_rejected: lasciare l'asserzione (fallirebbe) o rimuovere il test (perdita della copertura sulla lista).
   - evidence: `src/views/WeightView.test.ts`, test "lists the ten most recent measurements from the newest".
+
+| Durante la conferma di sovrascrittura i campi della modifica sono disabilitati | Corregge il finding della review: la conferma inviava lo snapshot `pendingEdit`, che poteva divergere dai valori visibili | Rileggere i campi al click su Sovrascrivi; chiudere il dialogo a ogni modifica | `WeightView.vue` (`:disabled="confirmingOverwrite"` sui campi data e peso) |

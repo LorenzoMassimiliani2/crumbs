@@ -242,6 +242,27 @@ describe('PUT /api/weights/:date', () => {
   })
 })
 
+describe('profile cache after a measurement', () => {
+  it('fills the profile weight when the profile is created after a measurement', async () => {
+    const saved = await call(env, 'PUT', '/api/weights/2026-11-04', { weight: 77.5 })
+    expect(saved.status).toBe(200)
+
+    const response = await call(env, 'PUT', '/api/profile', {
+      height: 178,
+      sex: 'm',
+      birthDate: '1990-04-12',
+      targetKcal: 2200,
+    })
+    expect(response.status).toBe(200)
+    expect(await profileWeight(env)).toBe(77.5)
+
+    const profile = (await (await call(env, 'GET', '/api/profile')).json()) as {
+      weight: number | null
+    }
+    expect(profile.weight).toBe(77.5)
+  })
+})
+
 describe('DELETE /api/weights/:date', () => {
   it('deletes the measurement of the date and returns 204', async () => {
     await call(env, 'PUT', '/api/weights/2026-11-05', { weight: 77.4 })

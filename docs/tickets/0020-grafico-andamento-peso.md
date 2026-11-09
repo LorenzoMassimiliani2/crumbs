@@ -83,3 +83,5 @@ Fuori scope:
   - rationale: evita due stati vuoti sovrapposti e non mostra un grafico senza dati.
   - alternatives_rejected: mostrare sempre il grafico con assi vuoti (sembra rotto); nascondere il selettore quando il periodo è vuoto (impedirebbe di cambiare periodo).
   - evidence: test "shows an empty state when the selected period has no measurements".
+
+| Il margine minimo dell'asse Y è 0,5 kg anche con escursioni piccole | Corregge il finding della review: il ticket chiedeva almeno 0,5 kg, non solo per escursione nulla | Applicare il minimo solo al caso a misura singola | `Math.max((max - min) * 0.15, 0.5)`; test con 78–80 kg → 77,5–80,5 |
