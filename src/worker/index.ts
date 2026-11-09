@@ -1,3 +1,12 @@
+import {
+  createActivity,
+  createActivityEntry,
+  deleteActivity,
+  deleteActivityEntry,
+  listActivities,
+  updateActivity,
+  updateActivityEntry,
+} from './activities'
 import { verifyGoogleIdToken, type GoogleClaims } from './auth'
 import type { Env } from './env'
 import { exportDiary } from './export'
@@ -150,6 +159,41 @@ const routes: ApiRoute[] = [
     method: 'GET',
     pattern: /^\/api\/days\/(\d{4}-\d{2}-\d{2})$/,
     handler: (_request, env, userId, [date]) => getDay(env, userId, date!),
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/activities$/,
+    handler: (_request, env, userId) => listActivities(env, userId),
+  },
+  {
+    method: 'POST',
+    pattern: /^\/api\/activities$/,
+    handler: (request, env, userId) => createActivity(request, env, userId),
+  },
+  {
+    method: 'PATCH',
+    pattern: /^\/api\/activities\/([^/]+)$/,
+    handler: (request, env, userId, [id]) => updateActivity(request, env, userId, id!),
+  },
+  {
+    method: 'DELETE',
+    pattern: /^\/api\/activities\/([^/]+)$/,
+    handler: (_request, env, userId, [id]) => deleteActivity(env, userId, id!),
+  },
+  {
+    method: 'POST',
+    pattern: /^\/api\/activity-entries$/,
+    handler: (request, env, userId) => createActivityEntry(request, env, userId),
+  },
+  {
+    method: 'PUT',
+    pattern: /^\/api\/activity-entries\/([^/]+)$/,
+    handler: (request, env, userId, [id]) => updateActivityEntry(request, env, userId, id!),
+  },
+  {
+    method: 'DELETE',
+    pattern: /^\/api\/activity-entries\/([^/]+)$/,
+    handler: (_request, env, userId, [id]) => deleteActivityEntry(env, userId, id!),
   },
   {
     method: 'POST',

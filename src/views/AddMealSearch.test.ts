@@ -77,7 +77,8 @@ afterEach(() => {
 async function openFlow() {
   const wrapper = mount(HomeView)
   await flushPromises()
-  await wrapper.get('[data-testid="add-meal"]').trigger('click')
+  await wrapper.get('[data-testid="add-entry"]').trigger('click')
+  await wrapper.get('[data-testid="choose-meal"]').trigger('click')
   await flushPromises()
   return wrapper
 }

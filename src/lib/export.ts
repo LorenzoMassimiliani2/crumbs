@@ -21,12 +21,22 @@ export interface ExportDay {
   fat: number
 }
 
+export interface ExportActivity {
+  date: string
+  name: string
+  startedAt: string
+  endedAt: string
+  durationMinutes: number
+  note: string | null
+}
+
 export interface DiaryExport {
   from: string
   to: string
   targetKcal: number | null
   items: ExportItem[]
   days: ExportDay[]
+  activities: ExportActivity[]
 }
 
 type Cell = string | number | null
@@ -52,6 +62,15 @@ export const PASTI_HEADERS = [
   'Fonte',
 ]
 
+export const ATTIVITA_HEADERS = [
+  'Data',
+  'Attività',
+  'Inizio',
+  'Fine',
+  'Durata (min)',
+  'Nota',
+]
+
 export const GIORNI_HEADERS = [
   'Data',
   'kcal totali',
@@ -62,7 +81,19 @@ export const GIORNI_HEADERS = [
   'Grassi (g)',
 ]
 
-export function buildExportSheets(data: DiaryExport): { pasti: Cell[][]; giorni: Cell[][] } {
+/** Hour and minute of an instant in the device time zone, as `HH:MM`. */
+function formatLocalTime(instant: string): string {
+  const at = new Date(instant)
+  const hours = String(at.getHours()).padStart(2, '0')
+  const minutes = String(at.getMinutes()).padStart(2, '0')
+  return `${hours}:${minutes}`
+}
+
+export function buildExportSheets(data: DiaryExport): {
+  pasti: Cell[][]
+  giorni: Cell[][]
+  attivita: Cell[][]
+} {
   const pasti: Cell[][] = [
     PASTI_HEADERS,
     ...data.items.map((item) => [
@@ -94,7 +125,19 @@ export function buildExportSheets(data: DiaryExport): { pasti: Cell[][]; giorni:
     ]),
   ]
 
-  return { pasti, giorni }
+  const attivita: Cell[][] = [
+    ATTIVITA_HEADERS,
+    ...data.activities.map((activity) => [
+      activity.date,
+      activity.name,
+      formatLocalTime(activity.startedAt),
+      formatLocalTime(activity.endedAt),
+      activity.durationMinutes,
+      activity.note,
+    ]),
+  ]
+
+  return { pasti, giorni, attivita }
 }
 
 /** SheetJS is loaded only when a file is actually built, keeping it out of the initial bundle. */
@@ -104,6 +147,7 @@ export async function buildExportWorkbook(data: DiaryExport): Promise<WorkBook> 
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(sheets.pasti), 'pasti')
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(sheets.giorni), 'giorni')
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(sheets.attivita), 'Attività')
   return workbook
 }
 

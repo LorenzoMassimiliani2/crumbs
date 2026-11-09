@@ -1,3 +1,4 @@
+import { activityDurationMinutes } from '../lib/activity'
 import {
   itemNutrientTotals,
   round,
@@ -16,6 +17,15 @@ export interface ExportItem extends ItemNutrition {
   name: string
   grams: number
   source: FoodSource
+}
+
+export interface ExportActivity {
+  date: string
+  name: string
+  startedAt: string
+  endedAt: string
+  durationMinutes: number
+  note: string | null
 }
 
 export interface ExportDay {
@@ -41,6 +51,14 @@ interface ItemRow {
   fiber_100g: number | null
   sugar_100g: number | null
   salt_100g: number | null
+}
+
+interface ActivityRow {
+  date: string
+  name: string
+  started_at: string
+  ended_at: string
+  note: string | null
 }
 
 function badRequest(error: string): Response {
@@ -129,5 +147,24 @@ export async function exportDiary(
     }
   })
 
-  return Response.json({ from, to, targetKcal, items, days })
+  const activityRows = await env.DB.prepare(
+    `SELECT local_date AS date, name_snapshot AS name, started_at, ended_at, note
+     FROM activity_entries
+     WHERE user_id = ? AND deleted_at IS NULL
+       AND local_date >= ? AND local_date <= ?
+     ORDER BY local_date ASC, started_at ASC, id ASC`,
+  )
+    .bind(userId, from, to)
+    .all<ActivityRow>()
+
+  const activities: ExportActivity[] = activityRows.results.map((row) => ({
+    date: row.date,
+    name: row.name,
+    startedAt: row.started_at,
+    endedAt: row.ended_at,
+    durationMinutes: activityDurationMinutes(row.started_at, row.ended_at),
+    note: row.note,
+  }))
+
+  return Response.json({ from, to, targetKcal, items, days, activities })
 }
