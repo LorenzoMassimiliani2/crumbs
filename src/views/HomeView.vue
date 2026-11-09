@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ChevronLeft, ChevronRight, Pencil, Plus } from '@lucide/vue'
+import { ChevronLeft, ChevronRight, Dumbbell, Pencil, Plus, Utensils } from '@lucide/vue'
 import { computed, onMounted, ref, watch } from 'vue'
 
 import { Button } from '@/components/ui/button'
+import { formatDuration, type DayActivity } from '@/lib/activity'
 import {
   formatKcal,
   formatNumber,
@@ -16,6 +17,7 @@ import {
 } from '@/lib/diary'
 import { MEAL_TYPE_LABELS } from '@/lib/meal-types'
 import { apiFetch } from '@/lib/api'
+import AddActivityFlow from './AddActivityFlow.vue'
 import AddMealFlow from './AddMealFlow.vue'
 
 const selectedDate = ref(toLocalDateString(new Date()))
@@ -23,7 +25,9 @@ const day = ref<Day | null>(null)
 const favorites = ref<Food[]>([])
 const loading = ref(true)
 const error = ref('')
+const chooserOpen = ref(false)
 const addOpen = ref(false)
+const activityOpen = ref(false)
 const editing = ref<DayMeal | null>(null)
 
 const SOURCE_LABELS: Record<FoodSource, string> = {
@@ -100,7 +104,26 @@ function pickDate(event: Event): void {
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) selectedDate.value = value
 }
 
-function openAdd(meal: DayMeal | null = null): void {
+function openChooser(): void {
+  chooserOpen.value = true
+}
+
+function chooseMeal(): void {
+  chooserOpen.value = false
+  editing.value = null
+  addOpen.value = true
+}
+
+function chooseActivity(): void {
+  chooserOpen.value = false
+  activityOpen.value = true
+}
+
+function closeChooser(): void {
+  chooserOpen.value = false
+}
+
+function openAdd(meal: DayMeal): void {
   editing.value = meal
   addOpen.value = true
 }
@@ -110,17 +133,51 @@ function closeAdd(): void {
   editing.value = null
 }
 
-async function afterChange(): Promise<void> {
+function closeActivity(): void {
+  activityOpen.value = false
+}
+
+async function afterMealChange(): Promise<void> {
   closeAdd()
   await Promise.all([loadDay(), loadFavorites()])
 }
 
-function mealTime(occurredAt: string): string {
-  return new Date(occurredAt).toLocaleTimeString('it-IT', {
+async function afterActivityChange(): Promise<void> {
+  closeActivity()
+  await loadDay()
+}
+
+function timeLabel(instant: string): string {
+  return new Date(instant).toLocaleTimeString('it-IT', {
     hour: '2-digit',
     minute: '2-digit',
   })
 }
+
+type TimelineEntry =
+  | { kind: 'meal'; key: string; at: string; meal: DayMeal }
+  | { kind: 'activity'; key: string; at: string; activity: DayActivity }
+
+/** Meals and activities share one chronological sequence. */
+const timeline = computed<TimelineEntry[]>(() => {
+  const entries: TimelineEntry[] = []
+  for (const meal of day.value?.meals ?? []) {
+    entries.push({ kind: 'meal', key: `meal-${meal.id}`, at: meal.occurredAt, meal })
+  }
+  for (const activity of day.value?.activities ?? []) {
+    entries.push({
+      kind: 'activity',
+      key: `activity-${activity.id}`,
+      at: activity.startedAt,
+      activity,
+    })
+  }
+  return entries.sort((a, b) => Date.parse(a.at) - Date.parse(b.at))
+})
+
+const dayEmpty = computed(
+  () => (day.value?.meals?.length ?? 0) === 0 && (day.value?.activities?.length ?? 0) === 0,
+)
 
 watch(selectedDate, () => {
   void loadDay()
@@ -218,26 +275,26 @@ onMounted(() => {
         </div>
       </section>
 
+      <template v-for="entry in timeline" :key="entry.key">
       <article
-        v-for="meal in day.meals"
-        :key="meal.id"
+        v-if="entry.kind === 'meal'"
         class="rounded-2xl border border-border bg-card"
       >
         <div class="flex items-center justify-between gap-2 px-4 pt-4">
           <div class="min-w-0">
-            <p class="text-sm font-semibold">{{ MEAL_TYPE_LABELS[meal.type] }}</p>
-            <p class="text-[11px] text-muted-foreground">{{ mealTime(meal.occurredAt) }}</p>
+            <p class="text-sm font-semibold">{{ MEAL_TYPE_LABELS[entry.meal.type] }}</p>
+            <p class="text-[11px] text-muted-foreground">{{ timeLabel(entry.meal.occurredAt) }}</p>
           </div>
           <div class="flex items-center gap-2">
             <span class="text-xs text-muted-foreground tabular-nums">
-              {{ formatKcal(meal.totals.kcal) }} kcal
+              {{ formatKcal(entry.meal.totals.kcal) }} kcal
             </span>
             <Button
               variant="ghost"
               size="icon-sm"
               type="button"
-              :aria-label="`Modifica ${MEAL_TYPE_LABELS[meal.type]}`"
-              @click="openAdd(meal)"
+              :aria-label="`Modifica ${MEAL_TYPE_LABELS[entry.meal.type]}`"
+              @click="openAdd(entry.meal)"
             >
               <Pencil />
             </Button>
@@ -246,7 +303,7 @@ onMounted(() => {
 
         <ul class="mt-2 divide-y divide-border/70 px-4 pb-3">
           <li
-            v-for="item in meal.items"
+            v-for="item in entry.meal.items"
             :key="item.id"
             class="flex items-center justify-between gap-3 py-2"
           >
@@ -263,18 +320,44 @@ onMounted(() => {
         </ul>
 
         <p
-          v-if="meal.note"
+          v-if="entry.meal.note"
           class="border-t border-border/70 px-4 py-2 text-[11px] italic text-muted-foreground"
         >
-          {{ meal.note }}
+          {{ entry.meal.note }}
         </p>
       </article>
 
+      <article
+        v-else
+        data-testid="activity-row"
+        class="rounded-2xl border border-border bg-card px-4 py-3"
+      >
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex min-w-0 items-center gap-2">
+            <Dumbbell class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <p class="truncate text-sm font-medium">{{ entry.activity.name }}</p>
+          </div>
+          <span class="shrink-0 text-[11px] text-muted-foreground tabular-nums">
+            {{ formatDuration(entry.activity.durationMinutes) }}
+          </span>
+        </div>
+        <p class="mt-0.5 pl-6 text-[11px] text-muted-foreground tabular-nums">
+          {{ timeLabel(entry.activity.startedAt) }}–{{ timeLabel(entry.activity.endedAt) }}
+        </p>
+        <p
+          v-if="entry.activity.note"
+          class="mt-1 pl-6 text-[11px] italic text-muted-foreground"
+        >
+          {{ entry.activity.note }}
+        </p>
+      </article>
+      </template>
+
       <p
-        v-if="day.meals.length === 0"
+        v-if="dayEmpty"
         class="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground"
       >
-        Nessun pasto in questo giorno.
+        Nessun pasto o attività in questo giorno.
       </p>
     </template>
   </div>
@@ -282,13 +365,50 @@ onMounted(() => {
   <Button
     type="button"
     size="icon-lg"
-    data-testid="add-meal"
-    aria-label="Aggiungi pasto"
+    data-testid="add-entry"
+    aria-label="Aggiungi pasto o attività"
     class="fixed bottom-20 right-[max(1rem,calc(50%-20rem))] z-30 size-14 rounded-full shadow-lg"
-    @click="openAdd()"
+    @click="openChooser"
   >
     <Plus class="size-6" />
   </Button>
+
+  <div
+    v-if="chooserOpen"
+    data-testid="add-chooser"
+    class="fixed inset-0 z-30"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Cosa vuoi aggiungere?"
+    @click.self="closeChooser"
+  >
+    <div
+      class="absolute bottom-36 right-[max(1rem,calc(50%-20rem))] flex flex-col items-end gap-2"
+    >
+      <Button
+        type="button"
+        variant="secondary"
+        size="lg"
+        data-testid="choose-activity"
+        class="shadow-lg"
+        @click="chooseActivity"
+      >
+        <Dumbbell />
+        + Attività
+      </Button>
+      <Button
+        type="button"
+        variant="secondary"
+        size="lg"
+        data-testid="choose-meal"
+        class="shadow-lg"
+        @click="chooseMeal"
+      >
+        <Utensils />
+        + Pasto
+      </Button>
+    </div>
+  </div>
 
   <AddMealFlow
     v-if="addOpen"
@@ -296,8 +416,15 @@ onMounted(() => {
     :meal="editing"
     :favorites="favorites"
     @close="closeAdd"
-    @saved="afterChange"
-    @deleted="afterChange"
+    @saved="afterMealChange"
+    @deleted="afterMealChange"
     @favorites-changed="loadFavorites"
+  />
+
+  <AddActivityFlow
+    v-if="activityOpen"
+    :date="selectedDate"
+    @close="closeActivity"
+    @saved="afterActivityChange"
   />
 </template>

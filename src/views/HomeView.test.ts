@@ -11,6 +11,7 @@ const DAY = {
   date: '2026-11-05',
   targetKcal: 2200,
   totals: TOTALS,
+  activities: [],
   meals: [
     {
       id: 'meal-1',
@@ -35,7 +36,13 @@ const DAY = {
   ],
 }
 
-const EMPTY_DAY = { date: '2026-11-06', targetKcal: 2200, totals: { ...TOTALS, kcal: 0 }, meals: [] }
+const EMPTY_DAY = {
+  date: '2026-11-06',
+  targetKcal: 2200,
+  totals: { ...TOTALS, kcal: 0 },
+  meals: [],
+  activities: [],
+}
 
 const FAVORITES = [
   {
@@ -65,6 +72,12 @@ function stubDay(day: unknown = DAY): void {
 
 function draftTotal(wrapper: ReturnType<typeof mount>): string {
   return wrapper.get('[data-testid="draft-total"]').text()
+}
+
+async function openMealFlow(wrapper: ReturnType<typeof mount>): Promise<void> {
+  await wrapper.get('[data-testid="add-entry"]').trigger('click')
+  await wrapper.get('[data-testid="choose-meal"]').trigger('click')
+  await flushPromises()
 }
 
 describe('HomeView', () => {
@@ -172,8 +185,7 @@ describe('HomeView', () => {
     const wrapper = mount(HomeView)
     await flushPromises()
 
-    await wrapper.get('[data-testid="add-meal"]').trigger('click')
-    await flushPromises()
+    await openMealFlow(wrapper)
 
     expect(wrapper.get('[data-testid="meal-type-pranzo"]').attributes('aria-pressed')).toBe('true')
     await wrapper.get('[data-testid="meal-type-cena"]').trigger('click')
@@ -223,7 +235,7 @@ describe('HomeView', () => {
     const wrapper = mount(HomeView)
     await flushPromises()
 
-    await wrapper.get('[data-testid="add-meal"]').trigger('click')
+    await openMealFlow(wrapper)
     await wrapper.get('[data-testid="create-food"]').trigger('click')
 
     await wrapper.get('#food-name').setValue('Torta della nonna')
@@ -267,7 +279,7 @@ describe('HomeView', () => {
     const wrapper = mount(HomeView)
     await flushPromises()
 
-    await wrapper.get('[data-testid="add-meal"]').trigger('click')
+    await openMealFlow(wrapper)
     const button = wrapper.findAll('button').find((item) => item.text().includes('Mistero'))!
     await button.trigger('click')
 
@@ -298,7 +310,7 @@ describe('HomeView', () => {
     const wrapper = mount(HomeView)
     await flushPromises()
 
-    await wrapper.get('[data-testid="add-meal"]').trigger('click')
+    await openMealFlow(wrapper)
     const mela = wrapper.findAll('button').find((button) => button.text().includes('Mela'))!
     await mela.trigger('click')
     await wrapper.get('[data-testid="save-meal"]').trigger('click')
@@ -321,8 +333,7 @@ describe('favorite management', () => {
     const wrapper = mount(HomeView)
     await flushPromises()
 
-    await wrapper.get('[data-testid="add-meal"]').trigger('click')
-    await flushPromises()
+    await openMealFlow(wrapper)
 
     await wrapper.get('[aria-label="Modifica preferito Mela"]').trigger('click')
     expect((wrapper.get('#edit-food-name').element as HTMLInputElement).value).toBe('Mela')
@@ -357,8 +368,7 @@ describe('favorite management', () => {
     const wrapper = mount(HomeView)
     await flushPromises()
 
-    await wrapper.get('[data-testid="add-meal"]').trigger('click')
-    await flushPromises()
+    await openMealFlow(wrapper)
 
     await wrapper.get('[aria-label="Elimina preferito Mela"]').trigger('click')
     expect(fetchStub().requests.some((request) => request.method === 'DELETE')).toBe(false)
@@ -384,8 +394,7 @@ describe('favorite management', () => {
     const wrapper = mount(HomeView)
     await flushPromises()
 
-    await wrapper.get('[data-testid="add-meal"]').trigger('click')
-    await flushPromises()
+    await openMealFlow(wrapper)
     await wrapper.get('[aria-label="Modifica preferito Mela"]').trigger('click')
     await wrapper.get('[data-testid="save-food-edit"]').trigger('click')
     await flushPromises()
@@ -399,8 +408,7 @@ describe('favorite management', () => {
 
     const wrapper = mount(HomeView)
     await flushPromises()
-    await wrapper.get('[data-testid="add-meal"]').trigger('click')
-    await flushPromises()
+    await openMealFlow(wrapper)
 
     const picker = wrapper.get('[data-testid="meal-type-picker"]')
     expect(picker.classes()).toContain('grid-cols-6')
@@ -435,8 +443,7 @@ describe('favorite management', () => {
 
     const wrapper = mount(HomeView)
     await flushPromises()
-    await wrapper.get('[data-testid="add-meal"]').trigger('click')
-    await flushPromises()
+    await openMealFlow(wrapper)
 
     const mela = wrapper.findAll('button').find((button) => button.text().includes('Mela'))!
     await mela.trigger('click')
@@ -475,8 +482,7 @@ describe('favorite management', () => {
 
     const wrapper = mount(HomeView)
     await flushPromises()
-    await wrapper.get('[data-testid="add-meal"]').trigger('click')
-    await flushPromises()
+    await openMealFlow(wrapper)
 
     expect(wrapper.text()).not.toContain('Nessun preferito trovato')
     expect(wrapper.text()).not.toContain('Preferiti')
@@ -513,8 +519,7 @@ describe('favorite management', () => {
 
     const wrapper = mount(HomeView)
     await flushPromises()
-    await wrapper.get('[data-testid="add-meal"]').trigger('click')
-    await flushPromises()
+    await openMealFlow(wrapper)
 
     await wrapper.get('input[aria-label="Cerca alimenti e prodotti"]').setValue('mel')
     await wrapper.get('input[aria-label="Cerca alimenti e prodotti"]').trigger('keydown.enter')
@@ -526,5 +531,230 @@ describe('favorite management', () => {
     expect(rows).toHaveLength(2)
     expect(rows[0]!.textContent).toContain('Preferito')
     expect(rows[1]!.textContent).toContain('Mela Golden')
+  })
+})
+
+const ACTIVITIES = [
+  { id: 'act-corsa', name: 'Corsa', lastUsedAt: null },
+  { id: 'act-yoga', name: 'Yoga', lastUsedAt: null },
+]
+
+function isoAt(hours: number, minutes: number): string {
+  return new Date(2026, 10, 5, hours, minutes).toISOString()
+}
+
+function stubActivities(activities: unknown = ACTIVITIES): void {
+  fetchStub().intercept(
+    (request) => request.method === 'GET' && request.url.endsWith('/api/activities'),
+    () => Response.json(activities),
+  )
+}
+
+async function openActivityFlow(wrapper: ReturnType<typeof mount>): Promise<void> {
+  await wrapper.get('[data-testid="add-entry"]').trigger('click')
+  await wrapper.get('[data-testid="choose-activity"]').trigger('click')
+  await flushPromises()
+}
+
+describe('activity diary', () => {
+  it('opens a chooser with + Pasto and + Attività, and + Pasto keeps the meal flow', async () => {
+    stubDay()
+
+    const wrapper = mount(HomeView)
+    await flushPromises()
+
+    await wrapper.get('[data-testid="add-entry"]').trigger('click')
+    const chooser = wrapper.get('[data-testid="add-chooser"]')
+    expect(chooser.text()).toContain('+ Pasto')
+    expect(chooser.text()).toContain('+ Attività')
+    expect(wrapper.find('[data-testid="add-meal-flow"]').exists()).toBe(false)
+
+    await wrapper.get('[data-testid="choose-meal"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="add-chooser"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="add-meal-flow"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="add-activity-flow"]').exists()).toBe(false)
+  })
+
+  it('opens the activity flow with catalog, times and the derived duration', async () => {
+    stubDay()
+    stubActivities()
+
+    const wrapper = mount(HomeView)
+    await flushPromises()
+    await openActivityFlow(wrapper)
+
+    expect(wrapper.find('[data-testid="add-activity-flow"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="activity-date"]').text()).toContain('5')
+    expect(
+      (wrapper.get('[aria-label="Ora di inizio"]').element as HTMLInputElement).value,
+    ).toBe('12:00')
+    expect((wrapper.get('[aria-label="Ora di fine"]').element as HTMLInputElement).value).toBe(
+      '13:00',
+    )
+    expect(wrapper.get('[data-testid="activity-duration"]').text()).toBe('1 h')
+
+    const options = wrapper.findAll('[data-testid="activity-option"]')
+    expect(options.map((option) => option.text())).toEqual(['Corsa', 'Yoga'])
+
+    await wrapper.get('[aria-label="Ora di inizio"]').setValue('11:00')
+    expect(wrapper.get('[data-testid="activity-duration"]').text()).toBe('2 h')
+
+    await wrapper.get('[aria-label="Ora di fine"]').setValue('13:30')
+    expect(wrapper.get('[data-testid="activity-duration"]').text()).toBe('2 h 30 min')
+
+    await wrapper.get('[aria-label="Cerca attività"]').setValue('yo')
+    expect(wrapper.findAll('[data-testid="activity-option"]').map((option) => option.text())).toEqual([
+      'Yoga',
+    ])
+  })
+
+  it('blocks the save with a clear message when the end is not after the start', async () => {
+    stubDay()
+    stubActivities()
+
+    const wrapper = mount(HomeView)
+    await flushPromises()
+    await openActivityFlow(wrapper)
+
+    await wrapper.get('[data-testid="activity-option"]').trigger('click')
+    await wrapper.get('[aria-label="Ora di fine"]').setValue('12:00')
+
+    expect(wrapper.text()).toContain("L'ora di fine deve essere successiva all'ora di inizio.")
+    await wrapper.get('[data-testid="save-activity"]').trigger('click')
+    await flushPromises()
+
+    expect(
+      fetchStub().requests.filter((request) => request.method === 'POST'),
+    ).toHaveLength(0)
+    expect(wrapper.find('[data-testid="add-activity-flow"]').exists()).toBe(true)
+  })
+
+  it('saves a catalog activity with its note and reloads the day', async () => {
+    stubDay()
+    stubActivities()
+    fetchStub().intercept(
+      (request) => request.method === 'POST' && request.url.endsWith('/api/activity-entries'),
+      () =>
+        Response.json(
+          {
+            id: 'entry-1',
+            activityId: 'act-corsa',
+            name: 'Corsa',
+            startedAt: isoAt(12, 0),
+            endedAt: isoAt(13, 30),
+            durationMinutes: 90,
+            note: 'Parco',
+          },
+          { status: 201 },
+        ),
+    )
+
+    const wrapper = mount(HomeView)
+    await flushPromises()
+    await openActivityFlow(wrapper)
+
+    await wrapper
+      .findAll('[data-testid="activity-option"]')
+      .find((option) => option.text() === 'Corsa')!
+      .trigger('click')
+    await wrapper.get('[aria-label="Ora di fine"]').setValue('13:30')
+    await wrapper.get('[aria-label="Nota attività"]').setValue('Parco')
+    await wrapper.get('[data-testid="save-activity"]').trigger('click')
+    await flushPromises()
+
+    const post = fetchStub().requests.find(
+      (request) => request.method === 'POST' && request.url.endsWith('/api/activity-entries'),
+    )!
+    expect(await post.json()).toEqual({
+      activityId: 'act-corsa',
+      localDate: '2026-11-05',
+      startedAt: isoAt(12, 0),
+      endedAt: isoAt(13, 30),
+      note: 'Parco',
+    })
+
+    expect(wrapper.find('[data-testid="add-activity-flow"]').exists()).toBe(false)
+    const dayRequests = fetchStub().requests.filter(
+      (request) => request.method === 'GET' && request.url.includes('/api/days/'),
+    )
+    expect(dayRequests).toHaveLength(2)
+  })
+
+  it('creates a new catalog activity from the flow and selects it', async () => {
+    const created = { id: 'act-nuova', name: 'Arrampicata', lastUsedAt: null }
+    let lists = 0
+    fetchStub().intercept(
+      (request) => request.method === 'POST' && request.url.endsWith('/api/activities'),
+      () => Response.json(created, { status: 201 }),
+    )
+    fetchStub().intercept(
+      (request) => request.method === 'GET' && request.url.endsWith('/api/activities'),
+      () => Response.json(lists++ === 0 ? ACTIVITIES : [...ACTIVITIES, created]),
+    )
+    stubDay()
+
+    const wrapper = mount(HomeView)
+    await flushPromises()
+    await openActivityFlow(wrapper)
+
+    await wrapper.get('[aria-label="Nome nuova attività"]').setValue('Arrampicata')
+    await wrapper.get('[data-testid="create-activity"]').trigger('click')
+    await flushPromises()
+
+    const post = fetchStub().requests.find(
+      (request) => request.method === 'POST' && request.url.endsWith('/api/activities'),
+    )!
+    expect(await post.json()).toEqual({ name: 'Arrampicata' })
+
+    const added = wrapper
+      .findAll('[data-testid="activity-option"]')
+      .find((option) => option.text() === 'Arrampicata')!
+    expect(added.attributes('aria-pressed')).toBe('true')
+  })
+
+  it('shows meals and activities in one chronological sequence, with notes only when present', async () => {
+    const day = {
+      ...DAY,
+      meals: [{ ...DAY.meals[0]!, occurredAt: isoAt(13, 0) }],
+      activities: [
+        {
+          id: 'entry-yoga',
+          activityId: 'act-yoga',
+          name: 'Yoga',
+          startedAt: isoAt(7, 0),
+          endedAt: isoAt(8, 0),
+          durationMinutes: 60,
+          note: null,
+        },
+        {
+          id: 'entry-camminata',
+          activityId: 'act-camminata',
+          name: 'Camminata',
+          startedAt: isoAt(12, 0),
+          endedAt: isoAt(13, 30),
+          durationMinutes: 90,
+          note: 'Con il cane',
+        },
+      ],
+    }
+    stubDay(day)
+
+    const wrapper = mount(HomeView)
+    await flushPromises()
+
+    const articles = wrapper.findAll('article')
+    expect(articles).toHaveLength(3)
+    expect(articles[0]!.text()).toContain('Yoga')
+    expect(articles[0]!.text()).not.toContain('Con il cane')
+    expect(articles[1]!.text()).toContain('Camminata')
+    expect(articles[1]!.text()).toContain('12:00–13:30')
+    expect(articles[1]!.text()).toContain('1 h 30 min')
+    expect(articles[1]!.text()).toContain('Con il cane')
+    expect(articles[2]!.text()).toContain('Pranzo')
+
+    expect(wrapper.get('[data-testid="day-consumed"]').text()).toContain('534')
+    expect(wrapper.get('[data-testid="day-target"]').text()).toContain('2200')
   })
 })

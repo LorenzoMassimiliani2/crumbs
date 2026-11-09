@@ -1,3 +1,4 @@
+import type { DayActivity } from './activity'
 import type { MealType } from './meal-types'
 
 export type FoodSource = 'off' | 'usda' | 'manual'
@@ -77,6 +78,7 @@ export interface Day {
   targetKcal: number | null
   totals: Totals
   meals: DayMeal[]
+  activities: DayActivity[]
 }
 
 export const ZERO_TOTALS: Totals = {

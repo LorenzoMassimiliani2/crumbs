@@ -1,3 +1,4 @@
+import { createActivity, createActivityEntry, listActivities } from './activities'
 import { verifyGoogleIdToken, type GoogleClaims } from './auth'
 import type { Env } from './env'
 import { exportDiary } from './export'
@@ -150,6 +151,21 @@ const routes: ApiRoute[] = [
     method: 'GET',
     pattern: /^\/api\/days\/(\d{4}-\d{2}-\d{2})$/,
     handler: (_request, env, userId, [date]) => getDay(env, userId, date!),
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/activities$/,
+    handler: (_request, env, userId) => listActivities(env, userId),
+  },
+  {
+    method: 'POST',
+    pattern: /^\/api\/activities$/,
+    handler: (request, env, userId) => createActivity(request, env, userId),
+  },
+  {
+    method: 'POST',
+    pattern: /^\/api\/activity-entries$/,
+    handler: (request, env, userId) => createActivityEntry(request, env, userId),
   },
   {
     method: 'POST',
