@@ -48,6 +48,131 @@ async function load(): Promise<void> {
   }
 }
 
+const editing = ref<WeightEntry | null>(null)
+const editForm = reactive({ date: '', weight: '' as string | number })
+const pendingEdit = ref<{ date: string; weight: number } | null>(null)
+const confirmingOverwrite = ref(false)
+const confirmingDelete = ref<string | null>(null)
+
+function startEdit(entry: WeightEntry): void {
+  editing.value = entry
+  editForm.date = entry.date
+  editForm.weight = String(entry.weight)
+  pendingEdit.value = null
+  confirmingOverwrite.value = false
+  confirmingDelete.value = null
+  message.value = ''
+  error.value = ''
+}
+
+function cancelEdit(): void {
+  editing.value = null
+  pendingEdit.value = null
+  confirmingOverwrite.value = false
+}
+
+function requestEditSave(): void {
+  if (!editing.value) return
+  const weight = Number(editForm.weight)
+  if (editForm.weight === '' || !Number.isFinite(weight)) {
+    error.value = 'Inserisci un peso valido.'
+    return
+  }
+  if (editForm.date === '') {
+    error.value = 'Inserisci una data.'
+    return
+  }
+
+  const target = { date: editForm.date, weight }
+  const occupied =
+    target.date !== editing.value.date &&
+    entries.value.some((entry) => entry.date === target.date)
+  if (occupied) {
+    pendingEdit.value = target
+    confirmingOverwrite.value = true
+    return
+  }
+
+  void commitEdit(target)
+}
+
+function confirmOverwrite(): void {
+  if (pendingEdit.value) void commitEdit(pendingEdit.value)
+}
+
+function cancelOverwrite(): void {
+  pendingEdit.value = null
+  confirmingOverwrite.value = false
+}
+
+/**
+ * Saving an edit writes the target date and, when the date changed, deletes the
+ * original one. The new date goes first so a failed delete leaves a recoverable
+ * duplicate instead of losing the measurement.
+ */
+async function commitEdit(target: { date: string; weight: number }): Promise<void> {
+  const original = editing.value
+  if (!original) return
+
+  saving.value = true
+  message.value = ''
+  error.value = ''
+  try {
+    const response = await apiFetch(`/api/weights/${target.date}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ weight: target.weight }),
+    })
+
+    if (!response.ok) {
+      const body = (await response.json().catch(() => null)) as { error?: string } | null
+      error.value = body?.error ?? 'Salvataggio non riuscito.'
+      return
+    }
+
+    if (target.date !== original.date) {
+      const removal = await apiFetch(`/api/weights/${original.date}`, { method: 'DELETE' })
+      if (!removal.ok && removal.status !== 404) {
+        error.value = 'Modifica non completata. Ricarica e riprova.'
+        await load()
+        return
+      }
+    }
+
+    editing.value = null
+    pendingEdit.value = null
+    confirmingOverwrite.value = false
+    message.value = 'Misura aggiornata.'
+    await load()
+  } catch {
+    error.value = 'Impossibile contattare il server.'
+  } finally {
+    saving.value = false
+  }
+}
+
+async function removeEntry(date: string): Promise<void> {
+  saving.value = true
+  message.value = ''
+  error.value = ''
+  try {
+    const response = await apiFetch(`/api/weights/${date}`, { method: 'DELETE' })
+    if (!response.ok && response.status !== 404) {
+      error.value = 'Eliminazione non riuscita.'
+      return
+    }
+
+    if (editing.value?.date === date) cancelEdit()
+    confirmingDelete.value = null
+    message.value = 'Misura eliminata.'
+    await load()
+  } catch {
+    error.value = 'Impossibile contattare il server.'
+  } finally {
+    saving.value = false
+  }
+}
+
 async function save(): Promise<void> {
   const weight = Number(form.weight)
   if (form.weight === '' || !Number.isFinite(weight)) {
@@ -121,6 +246,85 @@ onMounted(load)
 
     <WeightChart v-if="entries.length > 0" :entries="entries" :today="today" />
 
+    <Card v-if="editing" data-testid="edit-weight-panel">
+      <CardHeader>
+        <CardTitle>Modifica la misura</CardTitle>
+        <CardDescription>Salvando aggiorni questa misura, non ne crei una nuova.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form data-testid="edit-weight-form" class="space-y-3" @submit.prevent="requestEditSave">
+          <div class="grid grid-cols-2 gap-3">
+            <div class="space-y-1.5">
+              <Label for="edit-weight-date">Data</Label>
+              <Input
+                id="edit-weight-date"
+                v-model="editForm.date"
+                data-testid="edit-weight-date"
+                type="date"
+              />
+            </div>
+            <div class="space-y-1.5">
+              <Label for="edit-weight-value">Peso (kg)</Label>
+              <Input
+                id="edit-weight-value"
+                v-model="editForm.weight"
+                data-testid="edit-weight-value"
+                type="number"
+                inputmode="decimal"
+                min="30"
+                max="300"
+                step="0.1"
+              />
+            </div>
+          </div>
+
+          <div
+            v-if="confirmingOverwrite"
+            data-testid="confirm-overwrite-weight"
+            class="space-y-2 rounded-xl border border-destructive/40 p-3"
+          >
+            <p class="text-sm">
+              La data {{ pendingEdit ? formatWeightDate(pendingEdit.date) : '' }} ha già una
+              misura. Vuoi sovrascriverla?
+            </p>
+            <div class="flex gap-2">
+              <Button
+                type="button"
+                variant="destructive"
+                data-testid="confirm-overwrite-weight-button"
+                :disabled="saving"
+                @click="confirmOverwrite"
+              >
+                Sovrascrivi
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                data-testid="cancel-overwrite-weight"
+                @click="cancelOverwrite"
+              >
+                Annulla
+              </Button>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-3">
+            <Button type="submit" :disabled="saving" data-testid="save-edit-weight">
+              {{ saving ? 'Salvataggio…' : 'Salva modifica' }}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              data-testid="cancel-edit-weight"
+              @click="cancelEdit"
+            >
+              Annulla
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
+
     <Card>
       <CardHeader>
         <CardTitle>Registra il peso</CardTitle>
@@ -167,10 +371,63 @@ onMounted(load)
             v-for="entry in latest"
             :key="entry.date"
             data-testid="weight-entry"
-            class="flex items-center justify-between py-2 text-sm"
+            class="py-2 text-sm"
           >
-            <span>{{ formatWeightDate(entry.date) }}</span>
-            <span class="font-medium tabular-nums">{{ formatWeight(entry.weight) }} kg</span>
+            <div class="flex items-center justify-between gap-2">
+              <span>{{ formatWeightDate(entry.date) }}</span>
+              <span class="flex items-center gap-1">
+                <span class="font-medium tabular-nums">{{ formatWeight(entry.weight) }} kg</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  data-testid="edit-weight"
+                  @click="startEdit(entry)"
+                >
+                  Modifica
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  data-testid="delete-weight"
+                  :disabled="saving"
+                  @click="confirmingDelete = entry.date"
+                >
+                  Elimina
+                </Button>
+              </span>
+            </div>
+
+            <div
+              v-if="confirmingDelete === entry.date"
+              data-testid="confirm-delete-weight"
+              class="mt-2 space-y-2 rounded-xl border border-destructive/40 p-3"
+            >
+              <p>
+                Vuoi davvero eliminare la misura del {{ formatWeightDate(entry.date) }}?
+                L'operazione è definitiva.
+              </p>
+              <div class="flex gap-2">
+                <Button
+                  type="button"
+                  variant="destructive"
+                  data-testid="confirm-delete-weight-button"
+                  :disabled="saving"
+                  @click="removeEntry(entry.date)"
+                >
+                  Conferma eliminazione
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  data-testid="cancel-delete-weight"
+                  @click="confirmingDelete = null"
+                >
+                  Annulla
+                </Button>
+              </div>
+            </div>
           </li>
         </ul>
       </CardContent>

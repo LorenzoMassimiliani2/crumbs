@@ -229,3 +229,67 @@ describe('PUT /api/weights/:date', () => {
     expect(response.status).toBe(401)
   })
 })
+
+describe('DELETE /api/weights/:date', () => {
+  it('deletes the measurement of the date and returns 204', async () => {
+    await call(env, 'PUT', '/api/weights/2026-11-05', { weight: 77.4 })
+
+    const response = await call(env, 'DELETE', '/api/weights/2026-11-05')
+    expect(response.status).toBe(204)
+
+    expect(await getWeights(env)).toEqual([])
+  })
+
+  it('returns 404 when the date has no measurement', async () => {
+    const response = await call(env, 'DELETE', '/api/weights/2026-11-05')
+    expect(response.status).toBe(404)
+  })
+
+  it('does not delete or reveal another user measurement', async () => {
+    await seedUser(env, 'user-2', 'other@example.com')
+    await env.DB.prepare(
+      `INSERT INTO weight_entries (id, user_id, measured_on, weight_kg, created_at, updated_at)
+       VALUES ('foreign', 'user-2', '2026-11-05', 95, '2026-11-05T00:00:00.000Z', '2026-11-05T00:00:00.000Z')`,
+    ).run()
+
+    const response = await call(env, 'DELETE', '/api/weights/2026-11-05')
+    expect(response.status).toBe(404)
+
+    const foreign = await env.DB.prepare(
+      "SELECT weight_kg FROM weight_entries WHERE id = 'foreign'",
+    ).first<{ weight_kg: number }>()
+    expect(foreign?.weight_kg).toBe(95)
+  })
+
+  it('moves the profile weight cache to the latest remaining measurement', async () => {
+    await seedProfile(env)
+    await call(env, 'PUT', '/api/weights/2026-10-01', { weight: 80 })
+    await call(env, 'PUT', '/api/weights/2026-11-05', { weight: 77 })
+    expect(await profileWeight(env)).toBe(77)
+
+    const response = await call(env, 'DELETE', '/api/weights/2026-11-05')
+    expect(response.status).toBe(204)
+
+    expect(await profileWeight(env)).toBe(80)
+  })
+
+  it('keeps the last known profile weight after deleting the only measurement', async () => {
+    await seedProfile(env)
+    await getWeights(env)
+    expect(await profileWeight(env)).toBe(78)
+
+    const response = await call(env, 'DELETE', '/api/weights/2026-11-05')
+    expect(response.status).toBe(204)
+
+    expect(await getWeights(env, '?today=2026-12-01')).toEqual([])
+    expect(await profileWeight(env)).toBe(78)
+  })
+
+  it('requires a credential', async () => {
+    const response = await worker.fetch(
+      new Request('https://crumbs.test/api/weights/2026-11-05', { method: 'DELETE' }),
+      env,
+    )
+    expect(response.status).toBe(401)
+  })
+})

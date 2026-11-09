@@ -14,7 +14,7 @@ import { createFood, deleteFood, updateFood } from './foods'
 import { createMeal, deleteMeal, getDay, listFoods, updateMeal } from './meals'
 import { getOffProduct, searchFoods } from './off'
 import { parseProfile, profileFromRow } from './profile'
-import { listWeights, upsertWeight } from './weights'
+import { deleteWeight, listWeights, upsertWeight } from './weights'
 
 type AuthContext = { kind: 'service' } | { kind: 'google'; claims: GoogleClaims }
 
@@ -225,6 +225,11 @@ const routes: ApiRoute[] = [
     method: 'PUT',
     pattern: /^\/api\/weights\/([^/]+)$/,
     handler: (request, env, userId, [date]) => upsertWeight(request, env, userId, date!),
+  },
+  {
+    method: 'DELETE',
+    pattern: /^\/api\/weights\/([^/]+)$/,
+    handler: (_request, env, userId, [date]) => deleteWeight(env, userId, date!),
   },
   {
     method: 'GET',

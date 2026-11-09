@@ -77,6 +77,24 @@ export async function listWeights(
 }
 
 /**
+ * Rewrites the profile weight cache from the latest stored measurement. The
+ * `EXISTS` guard keeps the last known value when no measurement remains.
+ */
+function refreshProfileWeightStatement(env: Env, userId: string, now: string) {
+  return env.DB.prepare(
+    `UPDATE profiles
+     SET weight_kg = (
+           SELECT weight_kg FROM weight_entries
+           WHERE user_id = ? ORDER BY measured_on DESC LIMIT 1
+         ),
+         weight_updated_at = ?,
+         updated_at = ?
+     WHERE user_id = ?
+       AND EXISTS (SELECT 1 FROM weight_entries WHERE user_id = ?)`,
+  ).bind(userId, now, now, userId, userId)
+}
+
+/**
  * Creates or replaces the measurement of a date. The profile weight cache is
  * rewritten from the latest stored measurement in the same transaction, so a
  * backdated entry never moves the current weight.
@@ -113,18 +131,33 @@ export async function upsertWeight(
          weight_kg = excluded.weight_kg,
          updated_at = excluded.updated_at`,
     ).bind(crypto.randomUUID(), userId, date, weight, now, now),
-    env.DB.prepare(
-      `UPDATE profiles
-       SET weight_kg = (
-             SELECT weight_kg FROM weight_entries
-             WHERE user_id = ? ORDER BY measured_on DESC LIMIT 1
-           ),
-           weight_updated_at = ?,
-           updated_at = ?
-       WHERE user_id = ?
-         AND EXISTS (SELECT 1 FROM weight_entries WHERE user_id = ?)`,
-    ).bind(userId, now, now, userId, userId),
+    refreshProfileWeightStatement(env, userId, now),
   ])
 
   return Response.json({ date, weight } satisfies WeightEntry)
+}
+
+/**
+ * Removes the measurement of a date for good. A date without a measurement of
+ * this user is a 404; the cache follows the latest remaining measurement in
+ * the same transaction, keeping the last known value when none remains.
+ */
+export async function deleteWeight(
+  env: Env,
+  userId: string,
+  date: string,
+): Promise<Response> {
+  const now = new Date().toISOString()
+  const [deleted] = await env.DB.batch([
+    env.DB.prepare(
+      'DELETE FROM weight_entries WHERE user_id = ? AND measured_on = ? RETURNING id',
+    ).bind(userId, date),
+    refreshProfileWeightStatement(env, userId, now),
+  ])
+
+  if (deleted!.results.length !== 1) {
+    return Response.json({ error: 'Misura non trovata.' }, { status: 404 })
+  }
+
+  return new Response(null, { status: 204 })
 }
