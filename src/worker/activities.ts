@@ -82,12 +82,20 @@ async function seedDefaults(env: Env, userId: string, now: string): Promise<void
 }
 
 export async function listActivities(env: Env, userId: string): Promise<Response> {
-  const count = await env.DB.prepare('SELECT COUNT(*) AS n FROM activities WHERE user_id = ?')
+  // Seeding happens once per user: deleting every catalog activity must stay deleted.
+  const claimed = await env.DB.prepare(
+    'UPDATE users SET activities_seeded = 1 WHERE id = ? AND activities_seeded = 0',
+  )
     .bind(userId)
-    .first<{ n: number }>()
+    .run()
 
-  if ((count?.n ?? 0) === 0) {
-    await seedDefaults(env, userId, new Date().toISOString())
+  if (claimed.meta.changes === 1) {
+    const count = await env.DB.prepare('SELECT COUNT(*) AS n FROM activities WHERE user_id = ?')
+      .bind(userId)
+      .first<{ n: number }>()
+    if ((count?.n ?? 0) === 0) {
+      await seedDefaults(env, userId, new Date().toISOString())
+    }
   }
 
   const rows = await env.DB.prepare(
@@ -124,6 +132,13 @@ export async function updateActivity(
   userId: string,
   activityId: string,
 ): Promise<Response> {
+  const existing = await env.DB.prepare(
+    'SELECT id, last_used_at FROM activities WHERE id = ? AND user_id = ?',
+  )
+    .bind(activityId, userId)
+    .first<{ id: string; last_used_at: string | null }>()
+  if (!existing) return notFound()
+
   const body = await readJson(request)
   if (body === null || typeof body !== 'object') return badRequest('Richiesta non valida.')
 
@@ -131,13 +146,6 @@ export async function updateActivity(
   if (name === null) {
     return badRequest(`Il nome dell'attività è obbligatorio e può avere al massimo ${MAX_NAME} caratteri.`)
   }
-
-  const existing = await env.DB.prepare(
-    'SELECT id, last_used_at FROM activities WHERE id = ? AND user_id = ?',
-  )
-    .bind(activityId, userId)
-    .first<{ id: string; last_used_at: string | null }>()
-  if (!existing) return notFound()
 
   await env.DB.prepare(
     'UPDATE activities SET name = ?, updated_at = ? WHERE id = ? AND user_id = ?',
@@ -335,13 +343,13 @@ export async function updateActivityEntry(
   const name = existing.activity_id === activity.id ? existing.name_snapshot : activity.name
   const now = new Date().toISOString()
 
-  await env.DB.prepare(
-    `UPDATE activity_entries
-     SET activity_id = ?, name_snapshot = ?, local_date = ?, started_at = ?, ended_at = ?,
-         note = ?, updated_at = ?
-     WHERE id = ? AND user_id = ?`,
-  )
-    .bind(
+  const statements = [
+    env.DB.prepare(
+      `UPDATE activity_entries
+       SET activity_id = ?, name_snapshot = ?, local_date = ?, started_at = ?, ended_at = ?,
+           note = ?, updated_at = ?
+       WHERE id = ? AND user_id = ?`,
+    ).bind(
       activity.id,
       name,
       input.localDate,
@@ -351,8 +359,19 @@ export async function updateActivityEntry(
       now,
       entryId,
       userId,
+    ),
+  ]
+
+  // Switching to another activity is a new use: it must reorder the catalog.
+  if (existing.activity_id !== activity.id) {
+    statements.push(
+      env.DB.prepare(
+        'UPDATE activities SET last_used_at = ?, updated_at = ? WHERE id = ? AND user_id = ?',
+      ).bind(now, now, activity.id, userId),
     )
-    .run()
+  }
+
+  await env.DB.batch(statements)
 
   return Response.json({
     id: entryId,

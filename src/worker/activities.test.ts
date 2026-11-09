@@ -85,6 +85,19 @@ describe('GET /api/activities', () => {
     expect(row?.n).toBe(10)
   })
 
+  it('does not reseed after the user deletes every catalog activity', async () => {
+    const seeded = (await (await call(env, 'GET', '/api/activities')).json()) as {
+      id: string
+    }[]
+    for (const activity of seeded) {
+      expect((await call(env, 'DELETE', `/api/activities/${activity.id}`)).status).toBe(204)
+    }
+
+    const response = await call(env, 'GET', '/api/activities')
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual([])
+  })
+
   it('puts used activities above unused ones and sorts unused alphabetically', async () => {
     const seeded = (await (await call(env, 'GET', '/api/activities')).json()) as {
       id: string
@@ -458,6 +471,30 @@ describe('PUT /api/activity-entries/:id', () => {
     expect(await entryCount(env)).toBe(1)
   })
 
+  it('reorders the catalog when an edit switches to another activity', async () => {
+    const corsa = await createActivity(env, 'Corsa')
+    const yoga = await createActivity(env, 'Yoga')
+    const entry = await createEntry(env, corsa)
+    await env.DB.prepare(
+      "UPDATE activities SET last_used_at = '2026-01-01T00:00:00.000Z' WHERE id = ?",
+    )
+      .bind(corsa)
+      .run()
+
+    const response = await call(
+      env,
+      'PUT',
+      `/api/activity-entries/${entry.id}`,
+      entryBody(yoga),
+    )
+    expect(response.status).toBe(200)
+
+    const catalog = (await (await call(env, 'GET', '/api/activities')).json()) as {
+      id: string
+    }[]
+    expect(catalog[0]!.id).toBe(yoga)
+  })
+
   it('switches the activity and reads its name snapshot from the catalog', async () => {
     const corsa = await createActivity(env, 'Corsa')
     const yoga = await createActivity(env, 'Yoga')
@@ -711,6 +748,7 @@ describe('PATCH /api/activities/:id', () => {
     expect((await call(env, 'PATCH', '/api/activities/missing', { name: 'Corsa' })).status).toBe(
       404,
     )
+    expect((await call(env, 'PATCH', '/api/activities/missing', { name: '' })).status).toBe(404)
 
     await seedUser(env, 'user-2', 'other@example.com')
     await env.DB.prepare(
@@ -721,6 +759,9 @@ describe('PATCH /api/activities/:id', () => {
       name: 'Rubata',
     })
     expect(response.status).toBe(404)
+    expect(
+      (await call(env, 'PATCH', '/api/activities/foreign-activity', { name: '' })).status,
+    ).toBe(404)
 
     const row = await env.DB.prepare("SELECT name FROM activities WHERE id = 'foreign-activity'")
       .first<{ name: string }>()
