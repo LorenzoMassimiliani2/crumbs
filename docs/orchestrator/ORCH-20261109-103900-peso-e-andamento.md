@@ -58,7 +58,7 @@ Ordine seriale: 0019 → 0020 → 0021 → 0022.
 | implement 0021 | completed | commit bdbb4bb |
 | implement 0022 | completed | commit 819166f |
 | review | pending | |
-| merge | pending | branch `feat/peso` pronto, decisione umana |
+| merge | completed | merge `837eaf4` su `main` |
 
 ## Escalation
 
