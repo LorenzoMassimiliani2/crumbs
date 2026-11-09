@@ -3,19 +3,19 @@ import { ChevronDown } from '@lucide/vue'
 import { computed, ref } from 'vue'
 
 import { formatKcal, formatNumber } from '@/lib/diary'
-import {
-  buildDayTrend,
-  formatTrendDate,
-  formatTrendDay,
-  type Stats,
-  type TrendBar,
-} from '@/lib/stats'
+import { buildTrend, type Stats, type TrendBar, type TrendView } from '@/lib/stats'
 
-const props = defineProps<{ stats: Stats; today: string }>()
-const emit = defineEmits<{ select: [date: string] }>()
+const props = defineProps<{ stats: Stats; today: string; view: TrendView }>()
+const emit = defineEmits<{ select: [date: string]; 'update:view': [view: TrendView] }>()
+
+const VIEW_OPTIONS: { value: TrendView; label: string }[] = [
+  { value: 'day', label: 'Giorno' },
+  { value: 'week', label: 'Settimana' },
+  { value: 'month', label: 'Mese' },
+]
 
 const open = ref(true)
-const model = computed(() => buildDayTrend(props.stats, props.today))
+const model = computed(() => buildTrend(props.stats, props.view, props.today))
 
 const WIDTH = 320
 const HEIGHT = 180
@@ -36,25 +36,23 @@ const targetY = computed(() =>
   model.value.targetY === null ? null : PLOT.top + (1 - model.value.targetY) * plotHeight,
 )
 
-function barLabel(bar: TrendBar): string {
-  const meals = bar.meals === 1 ? '1 pasto' : `${bar.meals} pasti`
-  return `${formatTrendDate(bar.date)}: ${formatKcal(bar.kcal)} kcal, ${meals}`
-}
-
 const changeLabel = computed(() => {
   const change = model.value.changePercent
-  if (change === null) return ''
+  const suffix = model.value.changeLabel
+  if (change === null || suffix === null) return ''
   const sign = change > 0 ? '+' : ''
-  return `${sign}${formatNumber(change)}% rispetto ai 14 giorni precedenti`
+  return `${sign}${formatNumber(change)}% ${suffix}`
 })
 
-const chartLabel = computed(() => {
-  const count = model.value.bars.length
-  return `Andamento delle kcal degli ultimi 14 giorni, ${count} ${count === 1 ? 'giorno' : 'giorni'} con pasti`
-})
+const selectable = computed(() => props.view === 'day')
 
 function select(bar: TrendBar): void {
+  if (!selectable.value) return
   emit('select', bar.date)
+}
+
+function choose(view: TrendView): void {
+  emit('update:view', view)
 }
 </script>
 
@@ -77,6 +75,30 @@ function select(bar: TrendBar): void {
     </button>
 
     <div v-if="open" id="trend-body" class="px-4 pb-4">
+      <div
+        data-testid="trend-views"
+        role="group"
+        aria-label="Vista dell'andamento"
+        class="mb-3 inline-flex rounded-lg bg-muted p-1"
+      >
+        <button
+          v-for="option in VIEW_OPTIONS"
+          :key="option.value"
+          type="button"
+          :data-testid="`trend-view-${option.value}`"
+          :aria-pressed="view === option.value"
+          class="cursor-pointer rounded-md px-3 py-1 text-xs font-medium transition-colors"
+          :class="
+            view === option.value
+              ? 'bg-card text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'
+          "
+          @click="choose(option.value)"
+        >
+          {{ option.label }}
+        </button>
+      </div>
+
       <div v-if="model.bars.length > 0" class="space-y-3">
         <dl class="grid grid-cols-3 gap-2 text-center">
           <div class="rounded-xl bg-muted/60 py-2">
@@ -103,9 +125,9 @@ function select(bar: TrendBar): void {
           :viewBox="`0 0 ${WIDTH} ${HEIGHT}`"
           class="h-auto w-full"
           role="group"
-          :aria-label="chartLabel"
+          :aria-label="model.chartLabel"
         >
-          <title>{{ chartLabel }}</title>
+          <title>{{ model.chartLabel }}</title>
 
           <text
             :x="PLOT.left - 4"
@@ -156,17 +178,18 @@ function select(bar: TrendBar): void {
 
           <g
             v-for="bar in model.bars"
-            :key="bar.date"
+            :key="bar.key"
             data-testid="trend-bar"
-            role="button"
-            tabindex="0"
-            class="cursor-pointer text-primary focus:outline-none"
-            :aria-label="barLabel(bar)"
+            :role="selectable ? 'button' : 'img'"
+            :tabindex="selectable ? 0 : undefined"
+            class="text-primary focus:outline-none"
+            :class="selectable ? 'cursor-pointer' : ''"
+            :aria-label="bar.label"
             @click="select(bar)"
             @keydown.enter.prevent="select(bar)"
             @keydown.space.prevent="select(bar)"
           >
-            <title>{{ barLabel(bar) }}</title>
+            <title>{{ bar.label }}</title>
             <rect
               :x="barX(bar)"
               :y="barY(bar)"
@@ -174,7 +197,8 @@ function select(bar: TrendBar): void {
               :height="barHeight(bar)"
               rx="2"
               fill="currentColor"
-              class="opacity-80 hover:opacity-100"
+              class="opacity-80"
+              :class="selectable ? 'hover:opacity-100' : ''"
             />
           </g>
 
@@ -186,13 +210,13 @@ function select(bar: TrendBar): void {
             text-anchor="middle"
             class="fill-muted-foreground text-[9px] tabular-nums"
           >
-            {{ formatTrendDay(model.days[index]!) }}
+            {{ model.slotLabels[index] }}
           </text>
         </svg>
       </div>
 
       <p v-else data-testid="trend-empty" class="text-sm text-muted-foreground">
-        Nessun giorno con pasti negli ultimi 14 giorni.
+        {{ model.emptyLabel }}
       </p>
     </div>
   </section>

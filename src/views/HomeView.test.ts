@@ -1367,6 +1367,34 @@ describe('calorie trend section', () => {
     expect(new URL(dayRequests.at(-1)!.url).pathname).toBe('/api/days/2026-11-03')
   })
 
+  it('switches view with one request per period and remembers the choice', async () => {
+    stubDay()
+    stubStats()
+
+    const wrapper = mount(HomeView)
+    await flushPromises()
+
+    await wrapper.get('[data-testid="trend-view-week"]').trigger('click')
+    await flushPromises()
+
+    let statsRequests = fetchStub().requests.filter((request) => request.url.includes('/api/stats'))
+    expect(statsRequests).toHaveLength(2)
+    let url = new URL(statsRequests.at(-1)!.url)
+    expect(url.searchParams.get('from')).toBe('2026-07-20')
+    expect(url.searchParams.get('to')).toBe('2026-11-05')
+    expect(wrapper.get('[data-testid="trend-view-week"]').attributes('aria-pressed')).toBe('true')
+
+    await wrapper.get('[data-testid="trend-view-month"]').trigger('click')
+    await flushPromises()
+
+    statsRequests = fetchStub().requests.filter((request) => request.url.includes('/api/stats'))
+    expect(statsRequests).toHaveLength(3)
+    url = new URL(statsRequests.at(-1)!.url)
+    expect(url.searchParams.get('from')).toBe('2024-12-01')
+    expect(url.searchParams.get('to')).toBe('2026-11-05')
+    expect(wrapper.get('[data-testid="trend-view-month"]').attributes('aria-pressed')).toBe('true')
+  })
+
   it('shows the empty state when the last 14 days have no meals', async () => {
     stubDay()
     stubStats({ targetKcal: null, days: [{ date: '2026-09-01', kcal: 1500, meals: 1 }] })

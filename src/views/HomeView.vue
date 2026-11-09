@@ -17,7 +17,7 @@ import {
 } from '@/lib/diary'
 import { MEAL_TYPE_LABELS } from '@/lib/meal-types'
 import { apiFetch } from '@/lib/api'
-import { trendRange, type Stats } from '@/lib/stats'
+import { trendRangeFor, type Stats, type TrendView } from '@/lib/stats'
 import CalorieTrend from '@/components/CalorieTrend.vue'
 import AddActivityFlow from './AddActivityFlow.vue'
 import AddMealFlow from './AddMealFlow.vue'
@@ -33,6 +33,7 @@ function openDatePicker(): void {
 }
 const day = ref<Day | null>(null)
 const stats = ref<Stats | null>(null)
+const trendView = ref<TrendView>('day')
 const today = computed(() => toLocalDateString(new Date()))
 const favorites = ref<Food[]>([])
 const loading = ref(true)
@@ -116,9 +117,9 @@ async function loadDay(): Promise<void> {
   }
 }
 
-/** One request covers the current 14 days and the previous 14 for the variation. */
+/** One request covers the current period of the view and the one before it. */
 async function loadStats(): Promise<void> {
-  const { from, to } = trendRange(today.value)
+  const { from, to } = trendRangeFor(trendView.value, today.value)
   try {
     const response = await apiFetch(`/api/stats?from=${from}&to=${to}`)
     if (response.ok) stats.value = (await response.json()) as Stats
@@ -242,6 +243,10 @@ watch(selectedDate, () => {
   void loadDay()
 })
 
+watch(trendView, () => {
+  void loadStats()
+})
+
 onMounted(() => {
   void loadDay()
   void loadFavorites()
@@ -358,7 +363,14 @@ onMounted(() => {
         </div>
       </section>
 
-      <CalorieTrend v-if="stats" :stats="stats" :today="today" @select="selectDay" />
+      <CalorieTrend
+        v-if="stats"
+        :stats="stats"
+        :today="today"
+        :view="trendView"
+        @update:view="trendView = $event"
+        @select="selectDay"
+      />
 
       <template v-for="entry in timeline" :key="entry.key">
       <article
