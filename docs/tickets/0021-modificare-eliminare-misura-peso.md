@@ -41,7 +41,6 @@ Fuori scope:
 - [ ] Modifica ed eliminazione di dati di altri utenti non sono possibili.
 
 ## Choices
-
 - **`DELETE /api/weights/:date` eseguito con `DELETE ... RETURNING id` nello stesso `DB.batch` che ricalcola la cache del profilo**: il 404 nasce dall'assenza di righe restituite; la cache si aggiorna nella stessa transazione della cancellazione.
   - rationale: un solo round-trip transazionale, nessuna finestra tra controllo di esistenza e cancellazione, e il segnale di esistenza è la riga effettivamente eliminata.
   - alternatives_rejected: `SELECT` preventivo seguito da `DELETE` (race e due statement fuori transazione); `meta.changes` del batch (non popolato dall'adapter D1 dei test, quindi non verificabile al seam HTTP).

@@ -40,7 +40,6 @@ Fuori scope:
 - [ ] Altezza, sesso, data di nascita e target si salvano e validano come prima.
 
 ## Choices
-
 - **Migrazione `0006_profiles_weight_nullable.sql` che ricostruisce `profiles` rendendo `weight_kg` nullable**: SQLite non permette di rimuovere `NOT NULL` sul posto, quindi la tabella viene copiata in `profiles_new`, poi sostituita.
   - rationale: un profilo può nascere senza peso (`PUT /api/profile` senza `weight`), e la colonna non può restare `NOT NULL` senza inventare un valore; il peso ora è una cache scritta dalle misure, non un campo obbligatorio del profilo.
   - alternatives_rejected: usare un valore sentinella (es. `0`) e tradurlo in `null` in lettura (dato inventato nel database); non creare la riga profilo finché manca il peso (perdita di altezza, sesso, nascita e target); aggiungere una seconda colonna nullable (doppia fonte di verità).

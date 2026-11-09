@@ -43,7 +43,6 @@ Fuori scope:
 - [ ] La funzione del modello del grafico è coperta da test puri su filtro, scale e margine.
 
 ## Choices
-
 - **Modello puro in `src/lib/weight.ts`: `weightChartModel(entries, period, today)` restituisce `points` con `x`/`y` normalizzati 0–1 e dominio Y `yMin`/`yMax` già con margine.**
   - rationale: il componente deve solo mappare 0–1 sul rettangolo del grafico; filtro, scala e margine restano verificabili senza DOM al seam puro indicato dalla spec.
   - alternatives_rejected: coordinate SVG già in pixel nel modello (accoppia la geometria al layout); calcolare scale dentro il componente (non testabile).

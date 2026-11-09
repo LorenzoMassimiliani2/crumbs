@@ -49,7 +49,6 @@ Fuori scope:
 - [ ] Le rotte del peso richiedono la credenziale e filtrano per utente; dati di altri utenti non sono visibili né modificabili.
 
 ## Choices
-
 - **Migrazione additiva `0005_weight_entries.sql`**: nuova tabella `weight_entries` con `UNIQUE (user_id, measured_on)` e colonna `users.weights_seeded INTEGER NOT NULL DEFAULT 0`.
   - rationale: una sola riga per data è garantita dal database; il flag replica il pattern già usato per il catalogo attività ed è l'unico modo per distinguere "registro mai inizializzato" da "registro svuotato".
   - alternatives_rejected: deduplica applicativa senza vincolo (rischio di doppioni da richieste concorrenti); flag in `profiles` (il profilo può non esistere).
