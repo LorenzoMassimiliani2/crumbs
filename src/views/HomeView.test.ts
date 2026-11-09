@@ -908,3 +908,187 @@ describe('activity diary', () => {
     expect(rows.map((row) => row.text()).join(' ')).not.toContain('-')
   })
 })
+
+const ACTIVITY_CATALOG = [
+  { id: 'act-camminata', name: 'Camminata', lastUsedAt: '2026-11-04T00:00:00.000Z' },
+  { id: 'act-corsa', name: 'Corsa', lastUsedAt: null },
+  { id: 'act-yoga', name: 'Yoga', lastUsedAt: null },
+]
+
+const DAY_WITH_ACTIVITY = {
+  ...DAY,
+  meals: [{ ...DAY.meals[0]!, occurredAt: isoAt(13, 0) }],
+  activities: [
+    {
+      id: 'entry-camminata',
+      activityId: 'act-camminata',
+      name: 'Camminata',
+      startedAt: isoAt(12, 0),
+      endedAt: isoAt(13, 30),
+      durationMinutes: 90,
+      note: 'Con il cane',
+    },
+  ],
+}
+
+function stubActivityEditDay(day: unknown = DAY_WITH_ACTIVITY): void {
+  fetchStub().intercept(/\/api\/days\//, () => Response.json(day))
+  fetchStub().intercept(
+    (request) => request.method === 'GET' && request.url.endsWith('/api/activities'),
+    () => Response.json(ACTIVITY_CATALOG),
+  )
+}
+
+async function openActivityEdit(wrapper: ReturnType<typeof mount>): Promise<void> {
+  await wrapper.get('[aria-label="Modifica attività Camminata"]').trigger('click')
+  await flushPromises()
+}
+
+describe('activity entry editing and deletion', () => {
+  it('opens the edit flow precompiled from the saved activity', async () => {
+    stubActivityEditDay()
+
+    const wrapper = mount(HomeView)
+    await flushPromises()
+    await openActivityEdit(wrapper)
+
+    expect(wrapper.find('[data-testid="add-activity-flow"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="add-activity-flow"]').attributes('aria-label')).toBe(
+      'Modifica attività',
+    )
+    const selected = wrapper.findAll('[data-testid="activity-option"]').find(
+      (option) => option.attributes('aria-pressed') === 'true',
+    )!
+    expect(selected.text()).toBe('Camminata')
+    expect((wrapper.get('[aria-label="Ora di inizio"]').element as HTMLInputElement).value).toBe(
+      '12:00',
+    )
+    expect((wrapper.get('[aria-label="Ora di fine"]').element as HTMLInputElement).value).toBe(
+      '13:30',
+    )
+    expect((wrapper.get('[aria-label="Nota attività"]').element as HTMLInputElement).value).toBe(
+      'Con il cane',
+    )
+    expect(wrapper.get('[data-testid="activity-duration"]').text()).toBe('1 h 30 min')
+  })
+
+  it('saves the change with PUT and shows the new chronological order', async () => {
+    let dayRequests = 0
+    fetchStub().intercept(/\/api\/days\//, () =>
+      Response.json(
+        dayRequests++ === 0
+          ? DAY_WITH_ACTIVITY
+          : {
+              ...DAY_WITH_ACTIVITY,
+              activities: [
+                {
+                  ...DAY_WITH_ACTIVITY.activities[0]!,
+                  startedAt: isoAt(14, 30),
+                  endedAt: isoAt(15, 0),
+                  durationMinutes: 30,
+                  note: 'Pomeriggio',
+                },
+              ],
+            },
+      ),
+    )
+    fetchStub().intercept(
+      (request) => request.method === 'GET' && request.url.endsWith('/api/activities'),
+      () => Response.json(ACTIVITY_CATALOG),
+    )
+    fetchStub().intercept(
+      (request) =>
+        request.method === 'PUT' && request.url.endsWith('/api/activity-entries/entry-camminata'),
+      () => Response.json({ id: 'entry-camminata' }),
+    )
+
+    const wrapper = mount(HomeView)
+    await flushPromises()
+    await openActivityEdit(wrapper)
+
+    await wrapper.get('[aria-label="Ora di inizio"]').setValue('14:30')
+    await wrapper.get('[aria-label="Ora di fine"]').setValue('15:00')
+    await wrapper.get('[aria-label="Nota attività"]').setValue('Pomeriggio')
+    await wrapper.get('[data-testid="save-activity"]').trigger('click')
+    await flushPromises()
+
+    const put = fetchStub().requests.find((request) => request.method === 'PUT')!
+    expect(put.url).toMatch(/\/api\/activity-entries\/entry-camminata$/)
+    expect(await put.json()).toEqual({
+      activityId: 'act-camminata',
+      localDate: '2026-11-05',
+      startedAt: isoAt(14, 30),
+      endedAt: isoAt(15, 0),
+      note: 'Pomeriggio',
+    })
+    expect(
+      fetchStub().requests.filter(
+        (request) => request.method === 'POST' && request.url.endsWith('/api/activity-entries'),
+      ),
+    ).toHaveLength(0)
+
+    expect(wrapper.find('[data-testid="add-activity-flow"]').exists()).toBe(false)
+    const articles = wrapper.findAll('article')
+    expect(articles[0]!.text()).toContain('Pranzo')
+    expect(articles[1]!.text()).toContain('Camminata')
+    expect(articles[1]!.text()).toContain('14:30–15:00')
+    expect(wrapper.get('[data-testid="day-consumed"]').text()).toContain('534')
+  })
+
+  it('deletes only after an explicit confirmation and reloads the day', async () => {
+    let dayRequests = 0
+    fetchStub().intercept(/\/api\/days\//, () =>
+      Response.json(dayRequests++ === 0 ? DAY_WITH_ACTIVITY : { ...DAY_WITH_ACTIVITY, activities: [] }),
+    )
+    fetchStub().intercept(
+      (request) => request.method === 'GET' && request.url.endsWith('/api/activities'),
+      () => Response.json(ACTIVITY_CATALOG),
+    )
+    fetchStub().intercept(
+      (request) =>
+        request.method === 'DELETE' &&
+        request.url.endsWith('/api/activity-entries/entry-camminata'),
+      () => new Response(null, { status: 204 }),
+    )
+
+    const wrapper = mount(HomeView)
+    await flushPromises()
+    await openActivityEdit(wrapper)
+
+    await wrapper.get('[data-testid="delete-activity"]').trigger('click')
+    expect(fetchStub().requests.some((request) => request.method === 'DELETE')).toBe(false)
+    expect(wrapper.get('[data-testid="confirm-delete-activity"]').text()).toContain(
+      'Vuoi davvero eliminare questa attività?',
+    )
+
+    await wrapper.get('[data-testid="cancel-delete-activity"]').trigger('click')
+    expect(wrapper.find('[data-testid="confirm-delete-activity"]').exists()).toBe(false)
+
+    await wrapper.get('[data-testid="delete-activity"]').trigger('click')
+    await wrapper.get('[data-testid="confirm-delete-activity-button"]').trigger('click')
+    await flushPromises()
+
+    const remove = fetchStub().requests.find((request) => request.method === 'DELETE')!
+    expect(remove.url).toMatch(/\/api\/activity-entries\/entry-camminata$/)
+    expect(wrapper.find('[data-testid="add-activity-flow"]').exists()).toBe(false)
+    expect(wrapper.findAll('[data-testid="activity-row"]')).toHaveLength(0)
+  })
+
+  it('keeps the edit flow open and shows the server error when the update fails', async () => {
+    stubActivityEditDay()
+    fetchStub().intercept(
+      (request) => request.method === 'PUT',
+      () => Response.json({ error: 'La data locale non è valida.' }, { status: 400 }),
+    )
+
+    const wrapper = mount(HomeView)
+    await flushPromises()
+    await openActivityEdit(wrapper)
+
+    await wrapper.get('[data-testid="save-activity"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('La data locale non è valida.')
+    expect(wrapper.find('[data-testid="add-activity-flow"]').exists()).toBe(true)
+  })
+})

@@ -377,3 +377,260 @@ describe('GET /api/days/:date', () => {
     expect(day.activities).toEqual([])
   })
 })
+
+async function createEntry(
+  env: Env,
+  activityId: string,
+  overrides: Record<string, unknown> = {},
+): Promise<{ id: string; name: string; startedAt: string; note: string | null }> {
+  const response = await call(env, 'POST', '/api/activity-entries', entryBody(activityId, overrides))
+  expect(response.status).toBe(201)
+  return (await response.json()) as { id: string; name: string; startedAt: string; note: string | null }
+}
+
+/** An entry owned by a second user, used to prove per-user scoping. */
+async function seedForeignEntry(env: Env): Promise<string> {
+  await seedUser(env, 'user-2', 'other@example.com')
+  const id = 'foreign-entry'
+  await env.DB.prepare(
+    `INSERT INTO activity_entries
+       (id, user_id, activity_id, name_snapshot, local_date, started_at, ended_at, note,
+        created_at, updated_at)
+     VALUES (?, 'user-2', NULL, 'Corsa', '2026-11-05', '2026-11-05T12:00:00.000Z',
+             '2026-11-05T13:30:00.000Z', 'Altro', '2026-01-01T00:00:00.000Z',
+             '2026-01-01T00:00:00.000Z')`,
+  )
+    .bind(id)
+    .run()
+  return id
+}
+
+async function entryCount(env: Env): Promise<number> {
+  const row = await env.DB.prepare('SELECT COUNT(*) AS n FROM activity_entries').first<{ n: number }>()
+  return row?.n ?? 0
+}
+
+async function addMeal(env: Env): Promise<void> {
+  const response = await call(env, 'POST', '/api/meals', {
+    occurredAt: '2026-11-05T13:00:00.000Z',
+    localDate: '2026-11-05',
+    type: 'pranzo',
+    items: [
+      {
+        name: 'Pane',
+        source: 'manual',
+        sourceId: null,
+        brand: null,
+        grams: 100,
+        per100g: { kcal: 120, protein: 1, carbs: null, fat: null, fiber: null, sugar: null, salt: null },
+      },
+    ],
+  })
+  expect(response.status).toBe(201)
+}
+
+describe('PUT /api/activity-entries/:id', () => {
+  it('updates the existing entry and returns its new values without adding a row', async () => {
+    const corsa = await createActivity(env, 'Corsa')
+    const entry = await createEntry(env, corsa, { note: 'Parco' })
+
+    const response = await call(
+      env,
+      'PUT',
+      `/api/activity-entries/${entry.id}`,
+      entryBody(corsa, {
+        startedAt: '2026-11-05T18:00:00.000Z',
+        endedAt: '2026-11-05T19:30:00.000Z',
+        note: 'Lungo fiume',
+      }),
+    )
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      id: entry.id,
+      activityId: corsa,
+      name: 'Corsa',
+      startedAt: '2026-11-05T18:00:00.000Z',
+      endedAt: '2026-11-05T19:30:00.000Z',
+      durationMinutes: 90,
+      note: 'Lungo fiume',
+    })
+
+    expect(await entryCount(env)).toBe(1)
+  })
+
+  it('switches the activity and reads its name snapshot from the catalog', async () => {
+    const corsa = await createActivity(env, 'Corsa')
+    const yoga = await createActivity(env, 'Yoga')
+    const entry = await createEntry(env, corsa)
+
+    const response = await call(
+      env,
+      'PUT',
+      `/api/activity-entries/${entry.id}`,
+      entryBody(yoga, { note: null }),
+    )
+    expect(response.status).toBe(200)
+    expect(((await response.json()) as { name: string }).name).toBe('Yoga')
+
+    const row = await env.DB.prepare(
+      'SELECT activity_id, name_snapshot FROM activity_entries WHERE id = ?',
+    )
+      .bind(entry.id)
+      .first<{ activity_id: string; name_snapshot: string }>()
+    expect(row).toEqual({ activity_id: yoga, name_snapshot: 'Yoga' })
+  })
+
+  it('keeps the stored name snapshot when the activity is unchanged', async () => {
+    const corsa = await createActivity(env, 'Corsa')
+    const entry = await createEntry(env, corsa)
+    await env.DB.prepare("UPDATE activity_entries SET name_snapshot = 'Corsa vecchia' WHERE id = ?")
+      .bind(entry.id)
+      .run()
+
+    const response = await call(
+      env,
+      'PUT',
+      `/api/activity-entries/${entry.id}`,
+      entryBody(corsa, { note: 'Corretta' }),
+    )
+    expect(response.status).toBe(200)
+    expect(((await response.json()) as { name: string }).name).toBe('Corsa vecchia')
+  })
+
+  it('recalculates the day timeline after the times change and leaves totals alone', async () => {
+    await call(env, 'PUT', '/api/profile', {
+      weight: 78,
+      height: 178,
+      sex: 'm',
+      birthDate: '1990-04-12',
+      targetKcal: 2200,
+    })
+    await addMeal(env)
+    const corsa = await createActivity(env, 'Corsa')
+    const entry = await createEntry(env, corsa, {
+      startedAt: '2026-11-05T18:00:00.000Z',
+      endedAt: '2026-11-05T19:00:00.000Z',
+    })
+
+    await call(
+      env,
+      'PUT',
+      `/api/activity-entries/${entry.id}`,
+      entryBody(corsa, {
+        startedAt: '2026-11-05T07:00:00.000Z',
+        endedAt: '2026-11-05T08:00:00.000Z',
+      }),
+    )
+
+    const day = (await (await call(env, 'GET', '/api/days/2026-11-05')).json()) as {
+      totals: Record<string, number>
+      activities: { id: string; startedAt: string }[]
+    }
+    expect(day.totals.kcal).toBe(120)
+    expect(day.activities).toHaveLength(1)
+    expect(day.activities[0]!.startedAt).toBe('2026-11-05T07:00:00.000Z')
+  })
+
+  it('rejects an invalid payload and writes nothing', async () => {
+    const corsa = await createActivity(env, 'Corsa')
+    const entry = await createEntry(env, corsa, { note: 'Parco' })
+
+    const invalid = await call(
+      env,
+      'PUT',
+      `/api/activity-entries/${entry.id}`,
+      entryBody(corsa, { endedAt: '2026-11-05T11:00:00.000Z' }),
+    )
+    expect(invalid.status).toBe(400)
+
+    const row = await env.DB.prepare(
+      'SELECT ended_at, note FROM activity_entries WHERE id = ?',
+    )
+      .bind(entry.id)
+      .first<{ ended_at: string; note: string | null }>()
+    expect(row).toEqual({ ended_at: '2026-11-05T13:30:00.000Z', note: 'Parco' })
+  })
+
+  it('does not create catalog activities', async () => {
+    const corsa = await createActivity(env, 'Corsa')
+    const entry = await createEntry(env, corsa)
+
+    await call(env, 'PUT', `/api/activity-entries/${entry.id}`, entryBody(corsa))
+
+    const row = await env.DB.prepare('SELECT COUNT(*) AS n FROM activities').first<{ n: number }>()
+    expect(row?.n).toBe(1)
+    expect(await entryCount(env)).toBe(1)
+  })
+
+  it('returns 404 for a missing entry or one of another user', async () => {
+    const corsa = await createActivity(env, 'Corsa')
+
+    const missing = await call(env, 'PUT', '/api/activity-entries/missing', entryBody(corsa))
+    expect(missing.status).toBe(404)
+
+    const foreignId = await seedForeignEntry(env)
+    const foreign = await call(env, 'PUT', `/api/activity-entries/${foreignId}`, entryBody(corsa))
+    expect(foreign.status).toBe(404)
+
+    const row = await env.DB.prepare('SELECT note FROM activity_entries WHERE id = ?')
+      .bind(foreignId)
+      .first<{ note: string | null }>()
+    expect(row?.note).toBe('Altro')
+
+    // A catalog activity of another user is not selectable either.
+    await env.DB.prepare(
+      "INSERT INTO activities (id, user_id, name, created_at, updated_at) VALUES ('foreign-activity', 'user-2', 'Corsa', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')",
+    ).run()
+    const ownEntry = await createEntry(env, corsa)
+    const foreignActivity = await call(
+      env,
+      'PUT',
+      `/api/activity-entries/${ownEntry.id}`,
+      entryBody('foreign-activity'),
+    )
+    expect(foreignActivity.status).toBe(404)
+  })
+})
+
+describe('DELETE /api/activity-entries/:id', () => {
+  it('soft deletes the entry, hides it from the day and is idempotent', async () => {
+    await addMeal(env)
+    const corsa = await createActivity(env, 'Corsa')
+    const entry = await createEntry(env, corsa)
+
+    const first = await call(env, 'DELETE', `/api/activity-entries/${entry.id}`)
+    expect(first.status).toBe(204)
+
+    const row = await env.DB.prepare(
+      'SELECT deleted_at FROM activity_entries WHERE id = ?',
+    )
+      .bind(entry.id)
+      .first<{ deleted_at: string | null }>()
+    expect(row?.deleted_at).toEqual(expect.any(String))
+
+    const day = (await (await call(env, 'GET', '/api/days/2026-11-05')).json()) as {
+      totals: Record<string, number>
+      activities: unknown[]
+    }
+    expect(day.activities).toEqual([])
+    expect(day.totals.kcal).toBe(120)
+
+    const second = await call(env, 'DELETE', `/api/activity-entries/${entry.id}`)
+    expect(second.status).toBe(204)
+    expect(await entryCount(env)).toBe(1)
+  })
+
+  it('returns 404 for a missing entry or one of another user', async () => {
+    expect((await call(env, 'DELETE', '/api/activity-entries/missing')).status).toBe(404)
+
+    const foreignId = await seedForeignEntry(env)
+    expect((await call(env, 'DELETE', `/api/activity-entries/${foreignId}`)).status).toBe(404)
+
+    const row = await env.DB.prepare(
+      'SELECT deleted_at FROM activity_entries WHERE id = ?',
+    )
+      .bind(foreignId)
+      .first<{ deleted_at: string | null }>()
+    expect(row?.deleted_at).toBeNull()
+  })
+})

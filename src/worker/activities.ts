@@ -143,43 +143,75 @@ export async function createActivity(
   return Response.json(activity, { status: 201 })
 }
 
+interface EntryFields {
+  activityId: string
+  localDate: string
+  startedAt: string
+  endedAt: string
+  note: string | null
+}
+
+type ParsedEntry = { ok: true; value: EntryFields } | { ok: false; error: string }
+
+/** Validates the payload shared by create and update; the activity is looked up separately. */
+function parseEntryFields(body: unknown): ParsedEntry {
+  if (body === null || typeof body !== 'object') {
+    return { ok: false, error: 'Richiesta non valida.' }
+  }
+  const input = body as Record<string, unknown>
+
+  const activityId = input.activityId
+  if (typeof activityId !== 'string' || activityId.length === 0) {
+    return { ok: false, error: "Seleziona un'attività." }
+  }
+
+  if (!isRealDate(input.localDate)) {
+    return { ok: false, error: 'La data locale non è valida.' }
+  }
+
+  const startedAt = toUtcInstant(input.startedAt)
+  if (startedAt === null) return { ok: false, error: "L'orario di inizio non è valido." }
+  const endedAt = toUtcInstant(input.endedAt)
+  if (endedAt === null) return { ok: false, error: "L'orario di fine non è valido." }
+  const durationMs = Date.parse(endedAt) - Date.parse(startedAt)
+  if (durationMs <= 0) {
+    return { ok: false, error: "L'ora di fine deve essere successiva all'ora di inizio." }
+  }
+  if (durationMs > MAX_ACTIVITY_MINUTES * 60_000) {
+    return { ok: false, error: "La durata dell'attività non può superare le 24 ore." }
+  }
+
+  const note = parseNote(input.note)
+  if (note === undefined) return { ok: false, error: 'La nota non è valida.' }
+
+  return {
+    ok: true,
+    value: { activityId, localDate: input.localDate, startedAt, endedAt, note },
+  }
+}
+
+async function findActivity(
+  env: Env,
+  userId: string,
+  activityId: string,
+): Promise<{ id: string; name: string } | null> {
+  return env.DB.prepare('SELECT id, name FROM activities WHERE id = ? AND user_id = ?')
+    .bind(activityId, userId)
+    .first<{ id: string; name: string }>()
+}
+
 export async function createActivityEntry(
   request: Request,
   env: Env,
   userId: string,
 ): Promise<Response> {
-  const body = await readJson(request)
-  if (body === null || typeof body !== 'object') return badRequest('Richiesta non valida.')
-  const input = body as Record<string, unknown>
+  const parsed = parseEntryFields(await readJson(request))
+  if (!parsed.ok) return badRequest(parsed.error)
+  const input = parsed.value
+  const { activityId, localDate, startedAt, endedAt, note } = input
 
-  const activityId = input.activityId
-  if (typeof activityId !== 'string' || activityId.length === 0) {
-    return badRequest("Seleziona un'attività.")
-  }
-
-  const activity = await env.DB.prepare(
-    'SELECT id, name FROM activities WHERE id = ? AND user_id = ?',
-  )
-    .bind(activityId, userId)
-    .first<{ id: string; name: string }>()
+  const activity = await findActivity(env, userId, activityId)
   if (!activity) return notFound()
-
-  if (!isRealDate(input.localDate)) return badRequest('La data locale non è valida.')
-
-  const startedAt = toUtcInstant(input.startedAt)
-  if (startedAt === null) return badRequest("L'orario di inizio non è valido.")
-  const endedAt = toUtcInstant(input.endedAt)
-  if (endedAt === null) return badRequest("L'orario di fine non è valido.")
-  const durationMs = Date.parse(endedAt) - Date.parse(startedAt)
-  if (durationMs <= 0) {
-    return badRequest("L'ora di fine deve essere successiva all'ora di inizio.")
-  }
-  if (durationMs > MAX_ACTIVITY_MINUTES * 60_000) {
-    return badRequest("La durata dell'attività non può superare le 24 ore.")
-  }
-
-  const note = parseNote(input.note)
-  if (note === undefined) return badRequest('La nota non è valida.')
 
   const now = new Date().toISOString()
   const id = crypto.randomUUID()
@@ -195,7 +227,7 @@ export async function createActivityEntry(
       userId,
       activityId,
       activity.name,
-      input.localDate,
+      localDate,
       startedAt,
       endedAt,
       note,
@@ -219,6 +251,89 @@ export async function createActivityEntry(
     } satisfies DayActivity,
     { status: 201 },
   )
+}
+
+/**
+ * Rewrites activity, times and note of an existing entry. The stored name snapshot
+ * only changes when the entry switches to a different catalog activity; catalog
+ * renames never rewrite history. Editing does not reorder the catalog either.
+ */
+export async function updateActivityEntry(
+  request: Request,
+  env: Env,
+  userId: string,
+  entryId: string,
+): Promise<Response> {
+  const parsed = parseEntryFields(await readJson(request))
+  if (!parsed.ok) return badRequest(parsed.error)
+  const input = parsed.value
+
+  const existing = await env.DB.prepare(
+    `SELECT activity_id, name_snapshot FROM activity_entries
+     WHERE id = ? AND user_id = ? AND deleted_at IS NULL`,
+  )
+    .bind(entryId, userId)
+    .first<{ activity_id: string | null; name_snapshot: string }>()
+  if (!existing) return notFound()
+
+  const activity = await findActivity(env, userId, input.activityId)
+  if (!activity) return notFound()
+
+  const name = existing.activity_id === activity.id ? existing.name_snapshot : activity.name
+  const now = new Date().toISOString()
+
+  await env.DB.prepare(
+    `UPDATE activity_entries
+     SET activity_id = ?, name_snapshot = ?, local_date = ?, started_at = ?, ended_at = ?,
+         note = ?, updated_at = ?
+     WHERE id = ? AND user_id = ?`,
+  )
+    .bind(
+      activity.id,
+      name,
+      input.localDate,
+      input.startedAt,
+      input.endedAt,
+      input.note,
+      now,
+      entryId,
+      userId,
+    )
+    .run()
+
+  return Response.json({
+    id: entryId,
+    activityId: activity.id,
+    name,
+    startedAt: input.startedAt,
+    endedAt: input.endedAt,
+    durationMinutes: activityDurationMinutes(input.startedAt, input.endedAt),
+    note: input.note,
+  } satisfies DayActivity)
+}
+
+/** Soft delete; deleting an already deleted entry of the same user is a success. */
+export async function deleteActivityEntry(
+  env: Env,
+  userId: string,
+  entryId: string,
+): Promise<Response> {
+  const existing = await env.DB.prepare(
+    'SELECT id FROM activity_entries WHERE id = ? AND user_id = ?',
+  )
+    .bind(entryId, userId)
+    .first<{ id: string }>()
+  if (!existing) return notFound()
+
+  const now = new Date().toISOString()
+  await env.DB.prepare(
+    `UPDATE activity_entries SET deleted_at = ?, updated_at = ?
+     WHERE id = ? AND user_id = ? AND deleted_at IS NULL`,
+  )
+    .bind(now, now, entryId, userId)
+    .run()
+
+  return new Response(null, { status: 204 })
 }
 
 export async function listDayActivities(

@@ -11,14 +11,19 @@ import {
   formatDuration,
   LONG_ACTIVITY_MINUTES,
   type Activity,
+  type DayActivity,
 } from '@/lib/activity'
 import { apiFetch } from '@/lib/api'
 
-const props = defineProps<{ date: string }>()
+const props = defineProps<{
+  date: string
+  activity?: DayActivity | null
+}>()
 
 const emit = defineEmits<{
   close: []
   saved: []
+  deleted: []
 }>()
 
 const MAX_NOTE = 500
@@ -32,20 +37,33 @@ function timeValue(date: Date): string {
   return `${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
+function timeOfInstant(instant: string): string {
+  const date = new Date(instant)
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+const editing = computed(() => props.activity != null)
+
 const now = new Date()
-const startTime = ref(timeValue(now))
-const endTime = ref(timeValue(new Date(now.getTime() + 60 * 60 * 1000)))
+const startTime = ref(
+  props.activity ? timeOfInstant(props.activity.startedAt) : timeValue(now),
+)
+const endTime = ref(
+  props.activity
+    ? timeOfInstant(props.activity.endedAt)
+    : timeValue(new Date(now.getTime() + 60 * 60 * 1000)),
+)
 
 const catalog = ref<Activity[]>([])
 const loadingCatalog = ref(false)
 const catalogError = ref('')
 const query = ref('')
-const selectedId = ref<string | null>(null)
+const selectedId = ref<string | null>(props.activity?.activityId ?? null)
 const newName = ref('')
 const creating = ref(false)
 const saving = ref(false)
 const error = ref('')
-const note = ref('')
+const note = ref(props.activity?.note ?? '')
 
 const dateLabel = computed(() => {
   const [year, month, day] = props.date.split('-').map(Number) as [number, number, number]
@@ -85,6 +103,7 @@ const durationMinutes = computed<number | null>(() => {
 })
 
 const confirming = ref(false)
+const confirmingDelete = ref(false)
 
 async function loadCatalog(): Promise<void> {
   loadingCatalog.value = true
@@ -168,23 +187,47 @@ async function save(): Promise<void> {
   saving.value = true
   error.value = ''
   try {
-    const response = await apiFetch('/api/activity-entries', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        activityId: selectedId.value,
-        localDate: props.date,
-        startedAt: startedAt.value,
-        endedAt: endedAt.value,
-        note: note.value.trim() || null,
-      }),
-    })
+    const response = await apiFetch(
+      editing.value ? `/api/activity-entries/${props.activity!.id}` : '/api/activity-entries',
+      {
+        method: editing.value ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          activityId: selectedId.value,
+          localDate: props.date,
+          startedAt: startedAt.value,
+          endedAt: endedAt.value,
+          note: note.value.trim() || null,
+        }),
+      },
+    )
     if (!response.ok) {
       const body = (await response.json().catch(() => null)) as { error?: string } | null
       error.value = body?.error ?? 'Salvataggio non riuscito. Riprova.'
       return
     }
     emit('saved')
+  } catch {
+    error.value = 'Impossibile contattare il server.'
+  } finally {
+    saving.value = false
+  }
+}
+
+async function remove(): Promise<void> {
+  if (!props.activity || saving.value) return
+  saving.value = true
+  error.value = ''
+
+  try {
+    const response = await apiFetch(`/api/activity-entries/${props.activity.id}`, {
+      method: 'DELETE',
+    })
+    if (!response.ok) {
+      error.value = 'Eliminazione non riuscita. Riprova.'
+      return
+    }
+    emit('deleted')
   } catch {
     error.value = 'Impossibile contattare il server.'
   } finally {
@@ -201,14 +244,16 @@ onMounted(loadCatalog)
     class="fixed inset-0 z-40 flex justify-center bg-foreground/40"
     role="dialog"
     aria-modal="true"
-    aria-label="Aggiungi attività"
+    :aria-label="editing ? 'Modifica attività' : 'Aggiungi attività'"
   >
     <div class="flex h-full w-full max-w-2xl flex-col bg-background">
       <header class="flex items-center gap-2 border-b border-border px-4 py-3">
         <Button variant="ghost" size="icon" type="button" aria-label="Chiudi" @click="emit('close')">
           <X />
         </Button>
-        <h2 class="text-base font-semibold">Aggiungi attività</h2>
+        <h2 class="text-base font-semibold">
+          {{ editing ? 'Modifica attività' : 'Aggiungi attività' }}
+        </h2>
       </header>
 
       <div class="flex-1 space-y-5 overflow-y-auto px-4 pb-40 pt-4">
@@ -335,6 +380,46 @@ onMounted(loadCatalog)
           </p>
         </section>
 
+        <section v-if="editing" class="space-y-2">
+          <Button
+            v-if="!confirmingDelete"
+            type="button"
+            variant="destructive"
+            class="w-full"
+            data-testid="delete-activity"
+            :disabled="saving"
+            @click="confirmingDelete = true"
+          >
+            Elimina attività
+          </Button>
+          <div
+            v-else
+            data-testid="confirm-delete-activity"
+            class="space-y-2 rounded-xl border border-destructive/40 p-3"
+          >
+            <p class="text-sm">Vuoi davvero eliminare questa attività?</p>
+            <div class="flex gap-2">
+              <Button
+                type="button"
+                variant="destructive"
+                data-testid="confirm-delete-activity-button"
+                :disabled="saving"
+                @click="remove"
+              >
+                Conferma eliminazione
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                data-testid="cancel-delete-activity"
+                @click="confirmingDelete = false"
+              >
+                Annulla
+              </Button>
+            </div>
+          </div>
+        </section>
+
         <p v-if="error" role="alert" class="text-sm text-destructive">{{ error }}</p>
         <p v-else-if="timeError" role="alert" class="text-sm text-destructive">{{ timeError }}</p>
       </div>
@@ -348,7 +433,7 @@ onMounted(loadCatalog)
           :disabled="saving"
           @click="requestSave"
         >
-          {{ saving ? 'Salvataggio…' : 'Salva attività' }}
+          {{ saving ? 'Salvataggio…' : editing ? 'Salva modifiche' : 'Salva attività' }}
         </Button>
       </footer>
 

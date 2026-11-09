@@ -29,6 +29,7 @@ const chooserOpen = ref(false)
 const addOpen = ref(false)
 const activityOpen = ref(false)
 const editing = ref<DayMeal | null>(null)
+const editingActivity = ref<DayActivity | null>(null)
 
 const SOURCE_LABELS: Record<FoodSource, string> = {
   off: 'Open Food Facts',
@@ -116,6 +117,7 @@ function chooseMeal(): void {
 
 function chooseActivity(): void {
   chooserOpen.value = false
+  editingActivity.value = null
   activityOpen.value = true
 }
 
@@ -133,8 +135,14 @@ function closeAdd(): void {
   editing.value = null
 }
 
+function openActivityEdit(activity: DayActivity): void {
+  editingActivity.value = activity
+  activityOpen.value = true
+}
+
 function closeActivity(): void {
   activityOpen.value = false
+  editingActivity.value = null
 }
 
 async function afterMealChange(): Promise<void> {
@@ -337,9 +345,21 @@ onMounted(() => {
             <Dumbbell class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
             <p class="truncate text-sm font-medium">{{ entry.activity.name }}</p>
           </div>
-          <span class="shrink-0 text-[11px] text-muted-foreground tabular-nums">
-            {{ formatDuration(entry.activity.durationMinutes) }}
-          </span>
+          <div class="flex shrink-0 items-center gap-2">
+            <span class="text-[11px] text-muted-foreground tabular-nums">
+              {{ formatDuration(entry.activity.durationMinutes) }}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              type="button"
+              data-testid="edit-activity"
+              :aria-label="`Modifica attività ${entry.activity.name}`"
+              @click="openActivityEdit(entry.activity)"
+            >
+              <Pencil />
+            </Button>
+          </div>
         </div>
         <p class="mt-0.5 pl-6 text-[11px] text-muted-foreground tabular-nums">
           {{ timeLabel(entry.activity.startedAt) }}–{{ timeLabel(entry.activity.endedAt) }}
@@ -424,7 +444,9 @@ onMounted(() => {
   <AddActivityFlow
     v-if="activityOpen"
     :date="selectedDate"
+    :activity="editingActivity"
     @close="closeActivity"
     @saved="afterActivityChange"
+    @deleted="afterActivityChange"
   />
 </template>

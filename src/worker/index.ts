@@ -1,4 +1,10 @@
-import { createActivity, createActivityEntry, listActivities } from './activities'
+import {
+  createActivity,
+  createActivityEntry,
+  deleteActivityEntry,
+  listActivities,
+  updateActivityEntry,
+} from './activities'
 import { verifyGoogleIdToken, type GoogleClaims } from './auth'
 import type { Env } from './env'
 import { exportDiary } from './export'
@@ -166,6 +172,16 @@ const routes: ApiRoute[] = [
     method: 'POST',
     pattern: /^\/api\/activity-entries$/,
     handler: (request, env, userId) => createActivityEntry(request, env, userId),
+  },
+  {
+    method: 'PUT',
+    pattern: /^\/api\/activity-entries\/([^/]+)$/,
+    handler: (request, env, userId, [id]) => updateActivityEntry(request, env, userId, id!),
+  },
+  {
+    method: 'DELETE',
+    pattern: /^\/api\/activity-entries\/([^/]+)$/,
+    handler: (_request, env, userId, [id]) => deleteActivityEntry(env, userId, id!),
   },
   {
     method: 'POST',
