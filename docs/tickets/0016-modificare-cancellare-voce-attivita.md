@@ -40,7 +40,6 @@ Fuori scope:
 - [ ] I totali kcal del giorno restano invariati dopo modifica e cancellazione.
 
 ## Choices
-
 | decisione | rationale | alternatives_rejected | evidence |
 | --- | --- | --- | --- |
 | `POST` e `PUT` condividono la validazione `parseEntryFields` in `src/worker/activities.ts`; il `PUT` la riusa identica e poi cerca l'attività nel catalogo dell'utente | Un solo punto per le regole di forma (data reale, istanti ISO, fine > inizio, massimo 24 h, nota ≤ 500) evita che creazione e modifica divergano | Validazione duplicata nel secondo handler; un parser diverso per gli aggiornamenti | `src/worker/activities.ts` (`parseEntryFields`, `updateActivityEntry`); test "rejects an invalid payload and writes nothing" |

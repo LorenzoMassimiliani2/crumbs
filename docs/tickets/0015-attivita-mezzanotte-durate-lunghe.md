@@ -35,7 +35,6 @@ Nota: TICKET-0014 blocca il salvataggio quando la fine non è successiva all'ini
 - [ ] La durata mostrata in sola lettura usa sempre ore e minuti e non valori negativi.
 
 ## Choices
-
 | decisione | rationale | alternatives_rejected | evidence |
 | --- | --- | --- | --- |
 | La risoluzione della mezzanotte vive in `activityInstants(localDate, startTime, endTime)` in `src/lib/activity.ts`: se la fine è precedente all'inizio si costruisce l'istante sul giorno locale successivo | Un solo punto puro e testabile per la semantica degli orari, usato dal flusso UI; costruire la data locale con `day + 1` gestisce anche i cambi di ora legale, cosa che sommare 24 h in millisecondi non fa | Aggiungere 24 h in ms all'istante di fine; duplicare il calcolo dentro `AddActivityFlow.vue` | `src/lib/activity.ts` (`activityInstants`); test "rolls an end before the start to the following day"; test UI "reads times past midnight..." |

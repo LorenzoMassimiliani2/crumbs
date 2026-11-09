@@ -51,7 +51,6 @@ Fuori scope:
 - [ ] Tutte le nuove rotte richiedono la credenziale e non espongono dati di altri utenti.
 
 ## Choices
-
 | decisione | rationale | alternatives_rejected | evidence |
 | --- | --- | --- | --- |
 | Il catalogo predefinito viene creato alla prima `GET /api/activities` di un utente senza righe in `activities` | Rispetta la spec ("al primo accesso al catalogo") senza toccare la creazione utente né le migrazioni esistenti | Seed alla creazione dell'utente; seed in migrazione per tutti gli utenti | `src/worker/activities.ts` (`seedDefaults`); test "seeds the ten default activities on first access" |

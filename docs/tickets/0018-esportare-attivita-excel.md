@@ -39,7 +39,6 @@ Fuori scope:
 - [ ] Un intervallo senza attività produce solo l'intestazione del foglio Attività.
 
 ## Choices
-
 | decisione | rationale | alternatives_rejected | evidence |
 | --- | --- | --- | --- |
 | `GET /api/export` legge `activity_entries` filtrando `user_id`, `deleted_at IS NULL` e `local_date` nell'intervallo, ordinando per `local_date, started_at, id` | La `local_date` è il criterio con cui la voce appartiene al giorno (indipendente dal fuso dell'istante) e replica l'ordine del diario | Filtrare su `started_at`; ordinare solo per `started_at` senza la data | `src/worker/export.ts` (`ActivityRow`, query attività); test "returns the non-deleted activities of the range ordered by date and start" |

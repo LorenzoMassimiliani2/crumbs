@@ -41,7 +41,6 @@ Fuori scope:
 - [ ] `PATCH` e `DELETE` con identificativo di un altro utente restituiscono 404.
 
 ## Choices
-
 | decisione | rationale | alternatives_rejected | evidence |
 | --- | --- | --- | --- |
 | `PATCH /api/activities/:id` riusa `parseName` e valida il corpo prima di cercare la voce; risponde 400 per nome assente/vuoto/oltre 80 e 404 per id inesistente o altrui | Un solo punto per la regola del nome condivisa con `POST`, e la forma della richiesta è indipendente dal possesso della riga | Un parser separato per la rinomina; cercare prima la voce e validare dopo | `src/worker/activities.ts` (`updateActivity`, `parseName`); test "rejects an empty name or one longer than 80 characters" e "returns 404..." |
