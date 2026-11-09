@@ -17,6 +17,8 @@ import {
 } from '@/lib/diary'
 import { MEAL_TYPE_LABELS } from '@/lib/meal-types'
 import { apiFetch } from '@/lib/api'
+import { trendRange, type Stats } from '@/lib/stats'
+import CalorieTrend from '@/components/CalorieTrend.vue'
 import AddActivityFlow from './AddActivityFlow.vue'
 import AddMealFlow from './AddMealFlow.vue'
 
@@ -30,6 +32,8 @@ function openDatePicker(): void {
   else input.click()
 }
 const day = ref<Day | null>(null)
+const stats = ref<Stats | null>(null)
+const today = computed(() => toLocalDateString(new Date()))
 const favorites = ref<Food[]>([])
 const loading = ref(true)
 const error = ref('')
@@ -112,6 +116,17 @@ async function loadDay(): Promise<void> {
   }
 }
 
+/** One request covers the current 14 days and the previous 14 for the variation. */
+async function loadStats(): Promise<void> {
+  const { from, to } = trendRange(today.value)
+  try {
+    const response = await apiFetch(`/api/stats?from=${from}&to=${to}`)
+    if (response.ok) stats.value = (await response.json()) as Stats
+  } catch {
+    // The trend is a secondary section: a failure never blocks the diary.
+  }
+}
+
 async function loadFavorites(): Promise<void> {
   try {
     const response = await apiFetch('/api/foods')
@@ -130,6 +145,10 @@ function shiftDay(offset: number): void {
   const date = new Date(year, month - 1, dayOfMonth)
   date.setDate(date.getDate() + offset)
   selectedDate.value = toLocalDateString(date)
+}
+
+function selectDay(date: string): void {
+  selectedDate.value = date
 }
 
 function pickDate(event: Event): void {
@@ -179,7 +198,7 @@ function closeActivity(): void {
 
 async function afterMealChange(): Promise<void> {
   closeAdd()
-  await Promise.all([loadDay(), loadFavorites()])
+  await Promise.all([loadDay(), loadFavorites(), loadStats()])
 }
 
 async function afterActivityChange(): Promise<void> {
@@ -226,6 +245,7 @@ watch(selectedDate, () => {
 onMounted(() => {
   void loadDay()
   void loadFavorites()
+  void loadStats()
 })
 </script>
 
@@ -337,6 +357,8 @@ onMounted(() => {
           </div>
         </div>
       </section>
+
+      <CalorieTrend v-if="stats" :stats="stats" :today="today" @select="selectDay" />
 
       <template v-for="entry in timeline" :key="entry.key">
       <article

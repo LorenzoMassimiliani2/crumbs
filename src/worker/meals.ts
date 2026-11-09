@@ -370,20 +370,25 @@ interface ItemRow {
   salt_100g: number | null
 }
 
-export async function getDay(env: Env, userId: string, date: string): Promise<Response> {
-  if (!isRealDate(date)) return badRequest('Data non valida.')
-
-  const profile = await env.DB.prepare('SELECT target_kcal FROM profiles WHERE user_id = ?')
-    .bind(userId)
-    .first<{ target_kcal: number }>()
-
+/**
+ * Reads the non-deleted meals of an inclusive date range, grouped by local date.
+ *
+ * The day view and the calorie trend both read through this function, so a day's
+ * kcal has one calculation and one rounding wherever it is shown.
+ */
+export async function mealsByDate(
+  env: Env,
+  userId: string,
+  from: string,
+  to: string,
+): Promise<Map<string, DayMeal[]>> {
   const mealRows = await env.DB.prepare(
     `SELECT id, meal_type, occurred_at, local_date, note
      FROM meals
-     WHERE user_id = ? AND local_date = ? AND deleted_at IS NULL
-     ORDER BY occurred_at ASC, id ASC`,
+     WHERE user_id = ? AND local_date BETWEEN ? AND ? AND deleted_at IS NULL
+     ORDER BY local_date ASC, occurred_at ASC, id ASC`,
   )
-    .bind(userId, date)
+    .bind(userId, from, to)
     .all<MealRow>()
 
   const itemRows = await env.DB.prepare(
@@ -392,10 +397,10 @@ export async function getDay(env: Env, userId: string, date: string): Promise<Re
             mi.fiber_100g, mi.sugar_100g, mi.salt_100g
      FROM meal_items mi
      JOIN meals m ON m.id = mi.meal_id
-     WHERE m.user_id = ? AND m.local_date = ? AND m.deleted_at IS NULL
-     ORDER BY mi.position ASC`,
+     WHERE m.user_id = ? AND m.local_date BETWEEN ? AND ? AND m.deleted_at IS NULL
+     ORDER BY m.local_date ASC, m.occurred_at ASC, m.id ASC, mi.position ASC`,
   )
-    .bind(userId, date)
+    .bind(userId, from, to)
     .all<ItemRow>()
 
   const itemsByMeal = new Map<string, DayItem[]>()
@@ -423,9 +428,10 @@ export async function getDay(env: Env, userId: string, date: string): Promise<Re
     itemsByMeal.set(row.meal_id, items)
   }
 
-  const meals: DayMeal[] = mealRows.results.map((row) => {
+  const byDate = new Map<string, DayMeal[]>()
+  for (const row of mealRows.results) {
     const items = itemsByMeal.get(row.id) ?? []
-    return {
+    const meal: DayMeal = {
       id: row.id,
       type: row.meal_type as MealType,
       occurredAt: row.occurred_at,
@@ -434,8 +440,22 @@ export async function getDay(env: Env, userId: string, date: string): Promise<Re
       totals: sumTotals(items.map((item) => item.totals)),
       items,
     }
-  })
+    const meals = byDate.get(row.local_date) ?? []
+    meals.push(meal)
+    byDate.set(row.local_date, meals)
+  }
 
+  return byDate
+}
+
+export async function getDay(env: Env, userId: string, date: string): Promise<Response> {
+  if (!isRealDate(date)) return badRequest('Data non valida.')
+
+  const profile = await env.DB.prepare('SELECT target_kcal FROM profiles WHERE user_id = ?')
+    .bind(userId)
+    .first<{ target_kcal: number }>()
+
+  const meals = (await mealsByDate(env, userId, date, date)).get(date) ?? []
   const activities = await listDayActivities(env, userId, date)
 
   return Response.json({
