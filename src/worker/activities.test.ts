@@ -634,3 +634,201 @@ describe('DELETE /api/activity-entries/:id', () => {
     expect(row?.deleted_at).toBeNull()
   })
 })
+
+describe('PATCH /api/activities/:id', () => {
+  it('renames a catalog activity and returns it with its last use', async () => {
+    const corsa = await createActivity(env, 'Corsa')
+    await call(env, 'POST', '/api/activity-entries', entryBody(corsa))
+
+    const response = await call(env, 'PATCH', `/api/activities/${corsa}`, { name: '  Corsa su strada ' })
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      id: corsa,
+      name: 'Corsa su strada',
+      lastUsedAt: expect.any(String),
+    })
+
+    const catalog = (await (await call(env, 'GET', '/api/activities')).json()) as {
+      id: string
+      name: string
+    }[]
+    expect(catalog.find((activity) => activity.id === corsa)?.name).toBe('Corsa su strada')
+  })
+
+  it('does not rewrite the names saved in the diary', async () => {
+    const corsa = await createActivity(env, 'Corsa')
+    const entry = await createEntry(env, corsa)
+
+    await call(env, 'PATCH', `/api/activities/${corsa}`, { name: 'Corsa su strada' })
+
+    const row = await env.DB.prepare(
+      'SELECT activity_id, name_snapshot FROM activity_entries WHERE id = ?',
+    )
+      .bind(entry.id)
+      .first<{ activity_id: string; name_snapshot: string }>()
+    expect(row).toEqual({ activity_id: corsa, name_snapshot: 'Corsa' })
+
+    const day = (await (await call(env, 'GET', '/api/days/2026-11-05')).json()) as {
+      activities: { name: string }[]
+    }
+    expect(day.activities[0]!.name).toBe('Corsa')
+  })
+
+  it('renames the default catalog entries too', async () => {
+    const seeded = (await (await call(env, 'GET', '/api/activities')).json()) as {
+      id: string
+      name: string
+    }[]
+    const camminata = seeded.find((activity) => activity.name === 'Camminata')!
+
+    const response = await call(env, 'PATCH', `/api/activities/${camminata.id}`, {
+      name: 'Passeggiata',
+    })
+    expect(response.status).toBe(200)
+
+    const catalog = (await (await call(env, 'GET', '/api/activities')).json()) as {
+      name: string
+    }[]
+    expect(catalog.map((activity) => activity.name)).toContain('Passeggiata')
+    expect(catalog.map((activity) => activity.name)).not.toContain('Camminata')
+  })
+
+  it('rejects an empty name or one longer than 80 characters', async () => {
+    const corsa = await createActivity(env, 'Corsa')
+
+    for (const body of [{ name: '   ' }, { name: 'x'.repeat(81) }, {}]) {
+      const response = await call(env, 'PATCH', `/api/activities/${corsa}`, body)
+      expect(response.status, JSON.stringify(body)).toBe(400)
+    }
+
+    const row = await env.DB.prepare('SELECT name FROM activities WHERE id = ?')
+      .bind(corsa)
+      .first<{ name: string }>()
+    expect(row?.name).toBe('Corsa')
+  })
+
+  it('returns 404 for a missing activity or one of another user', async () => {
+    expect((await call(env, 'PATCH', '/api/activities/missing', { name: 'Corsa' })).status).toBe(
+      404,
+    )
+
+    await seedUser(env, 'user-2', 'other@example.com')
+    await env.DB.prepare(
+      "INSERT INTO activities (id, user_id, name, created_at, updated_at) VALUES ('foreign-activity', 'user-2', 'Corsa', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')",
+    ).run()
+
+    const response = await call(env, 'PATCH', '/api/activities/foreign-activity', {
+      name: 'Rubata',
+    })
+    expect(response.status).toBe(404)
+
+    const row = await env.DB.prepare("SELECT name FROM activities WHERE id = 'foreign-activity'")
+      .first<{ name: string }>()
+    expect(row?.name).toBe('Corsa')
+  })
+
+  it('requires a credential', async () => {
+    const response = await worker.fetch(
+      new Request('https://crumbs.test/api/activities/x', {
+        method: 'PATCH',
+        body: JSON.stringify({ name: 'Corsa' }),
+      }),
+      env,
+    )
+    expect(response.status).toBe(401)
+  })
+})
+
+describe('DELETE /api/activities/:id', () => {
+  it('removes the activity from the catalog and unlinks its diary entries', async () => {
+    const corsa = await createActivity(env, 'Corsa')
+    const other = await createActivity(env, 'Yoga')
+    const entry = await createEntry(env, corsa)
+
+    const response = await call(env, 'DELETE', `/api/activities/${corsa}`)
+    expect(response.status).toBe(204)
+
+    const catalog = (await (await call(env, 'GET', '/api/activities')).json()) as {
+      id: string
+    }[]
+    expect(catalog.map((activity) => activity.id)).toEqual([other])
+
+    const row = await env.DB.prepare(
+      'SELECT activity_id, name_snapshot FROM activity_entries WHERE id = ?',
+    )
+      .bind(entry.id)
+      .first<{ activity_id: string | null; name_snapshot: string }>()
+    expect(row).toEqual({ activity_id: null, name_snapshot: 'Corsa' })
+
+    const day = (await (await call(env, 'GET', '/api/days/2026-11-05')).json()) as {
+      activities: { activityId: string | null; name: string }[]
+    }
+    expect(day.activities).toHaveLength(1)
+    expect(day.activities[0]).toMatchObject({ activityId: null, name: 'Corsa' })
+  })
+
+  it('keeps the unlinked entry editable only after choosing an existing activity', async () => {
+    const corsa = await createActivity(env, 'Corsa')
+    const entry = await createEntry(env, corsa)
+    await call(env, 'DELETE', `/api/activities/${corsa}`)
+
+    const retry = await call(
+      env,
+      'PUT',
+      `/api/activity-entries/${entry.id}`,
+      entryBody(corsa),
+    )
+    expect(retry.status).toBe(404)
+
+    const yoga = await createActivity(env, 'Yoga')
+    const response = await call(env, 'PUT', `/api/activity-entries/${entry.id}`, entryBody(yoga))
+    expect(response.status).toBe(200)
+    expect(((await response.json()) as { name: string }).name).toBe('Yoga')
+
+    const row = await env.DB.prepare(
+      'SELECT activity_id, name_snapshot FROM activity_entries WHERE id = ?',
+    )
+      .bind(entry.id)
+      .first<{ activity_id: string; name_snapshot: string }>()
+    expect(row).toEqual({ activity_id: yoga, name_snapshot: 'Yoga' })
+  })
+
+  it('deletes the default catalog entries too', async () => {
+    const seeded = (await (await call(env, 'GET', '/api/activities')).json()) as {
+      id: string
+      name: string
+    }[]
+    const nuoto = seeded.find((activity) => activity.name === 'Nuoto')!
+
+    expect((await call(env, 'DELETE', `/api/activities/${nuoto.id}`)).status).toBe(204)
+
+    const catalog = (await (await call(env, 'GET', '/api/activities')).json()) as {
+      name: string
+    }[]
+    expect(catalog).toHaveLength(9)
+    expect(catalog.map((activity) => activity.name)).not.toContain('Nuoto')
+  })
+
+  it('returns 404 for a missing activity or one of another user', async () => {
+    expect((await call(env, 'DELETE', '/api/activities/missing')).status).toBe(404)
+
+    await seedUser(env, 'user-2', 'other@example.com')
+    await env.DB.prepare(
+      "INSERT INTO activities (id, user_id, name, created_at, updated_at) VALUES ('foreign-activity', 'user-2', 'Corsa', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')",
+    ).run()
+
+    expect((await call(env, 'DELETE', '/api/activities/foreign-activity')).status).toBe(404)
+
+    const row = await env.DB.prepare("SELECT COUNT(*) AS n FROM activities WHERE id = 'foreign-activity'")
+      .first<{ n: number }>()
+    expect(row?.n).toBe(1)
+  })
+
+  it('requires a credential', async () => {
+    const response = await worker.fetch(
+      new Request('https://crumbs.test/api/activities/x', { method: 'DELETE' }),
+      env,
+    )
+    expect(response.status).toBe(401)
+  })
+})

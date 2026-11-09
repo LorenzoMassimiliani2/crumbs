@@ -117,6 +117,59 @@ function parseNote(value: unknown): string | null | undefined {
   return trimmed.length <= MAX_NOTE ? trimmed : undefined
 }
 
+/** Renames a catalog activity; saved diary entries keep their own name snapshot. */
+export async function updateActivity(
+  request: Request,
+  env: Env,
+  userId: string,
+  activityId: string,
+): Promise<Response> {
+  const body = await readJson(request)
+  if (body === null || typeof body !== 'object') return badRequest('Richiesta non valida.')
+
+  const name = parseName((body as Record<string, unknown>).name)
+  if (name === null) {
+    return badRequest(`Il nome dell'attività è obbligatorio e può avere al massimo ${MAX_NAME} caratteri.`)
+  }
+
+  const existing = await env.DB.prepare(
+    'SELECT id, last_used_at FROM activities WHERE id = ? AND user_id = ?',
+  )
+    .bind(activityId, userId)
+    .first<{ id: string; last_used_at: string | null }>()
+  if (!existing) return notFound()
+
+  await env.DB.prepare(
+    'UPDATE activities SET name = ?, updated_at = ? WHERE id = ? AND user_id = ?',
+  )
+    .bind(name, new Date().toISOString(), activityId, userId)
+    .run()
+
+  return Response.json({ id: activityId, name, lastUsedAt: existing.last_used_at } satisfies Activity)
+}
+
+/** Removes a catalog activity and unlinks its diary entries, which keep their name snapshot. */
+export async function deleteActivity(
+  env: Env,
+  userId: string,
+  activityId: string,
+): Promise<Response> {
+  const existing = await env.DB.prepare('SELECT id FROM activities WHERE id = ? AND user_id = ?')
+    .bind(activityId, userId)
+    .first<{ id: string }>()
+  if (!existing) return notFound()
+
+  const now = new Date().toISOString()
+  await env.DB.batch([
+    env.DB.prepare(
+      'UPDATE activity_entries SET activity_id = NULL, updated_at = ? WHERE activity_id = ? AND user_id = ?',
+    ).bind(now, activityId, userId),
+    env.DB.prepare('DELETE FROM activities WHERE id = ? AND user_id = ?').bind(activityId, userId),
+  ])
+
+  return new Response(null, { status: 204 })
+}
+
 export async function createActivity(
   request: Request,
   env: Env,

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Plus, Search, X } from '@lucide/vue'
+import { Pencil, Plus, Search, Trash2, X } from '@lucide/vue'
 import { computed, onMounted, ref } from 'vue'
 
 import { Button } from '@/components/ui/button'
@@ -64,6 +64,12 @@ const creating = ref(false)
 const saving = ref(false)
 const error = ref('')
 const note = ref(props.activity?.note ?? '')
+
+const renaming = ref<Activity | null>(null)
+const renameName = ref('')
+const deletingActivity = ref<Activity | null>(null)
+const catalogSaving = ref(false)
+const catalogFeedback = ref('')
 
 const dateLabel = computed(() => {
   const [year, month, day] = props.date.split('-').map(Number) as [number, number, number]
@@ -159,9 +165,95 @@ async function createActivity(): Promise<void> {
   }
 }
 
+function openRename(activity: Activity): void {
+  renaming.value = activity
+  renameName.value = activity.name
+  deletingActivity.value = null
+  catalogFeedback.value = ''
+  error.value = ''
+}
+
+function cancelRename(): void {
+  renaming.value = null
+}
+
+async function saveRename(): Promise<void> {
+  if (!renaming.value || catalogSaving.value) return
+
+  const name = renameName.value.trim()
+  if (!name) {
+    error.value = "Il nome dell'attività è obbligatorio."
+    return
+  }
+  if (name.length > MAX_NAME) {
+    error.value = `Il nome può avere al massimo ${MAX_NAME} caratteri.`
+    return
+  }
+
+  catalogSaving.value = true
+  error.value = ''
+  catalogFeedback.value = ''
+  try {
+    const response = await apiFetch(`/api/activities/${renaming.value.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    })
+    if (!response.ok) {
+      const body = (await response.json().catch(() => null)) as { error?: string } | null
+      error.value = body?.error ?? 'Rinomina non riuscita. Riprova.'
+      return
+    }
+    const updated = (await response.json()) as Activity
+    const index = catalog.value.findIndex((activity) => activity.id === updated.id)
+    if (index >= 0) catalog.value[index] = updated
+    renaming.value = null
+    catalogFeedback.value = "Attività rinominata. Le voci già registrate non cambiano."
+  } catch {
+    error.value = 'Impossibile contattare il server.'
+  } finally {
+    catalogSaving.value = false
+  }
+}
+
+function askDelete(activity: Activity): void {
+  deletingActivity.value = activity
+  renaming.value = null
+  catalogFeedback.value = ''
+  error.value = ''
+}
+
+function cancelDelete(): void {
+  deletingActivity.value = null
+}
+
+async function confirmDelete(): Promise<void> {
+  if (!deletingActivity.value || catalogSaving.value) return
+
+  const target = deletingActivity.value
+  catalogSaving.value = true
+  error.value = ''
+  catalogFeedback.value = ''
+  try {
+    const response = await apiFetch(`/api/activities/${target.id}`, { method: 'DELETE' })
+    if (!response.ok) {
+      error.value = 'Eliminazione non riuscita. Riprova.'
+      return
+    }
+    catalog.value = catalog.value.filter((activity) => activity.id !== target.id)
+    if (selectedId.value === target.id) selectedId.value = null
+    deletingActivity.value = null
+    catalogFeedback.value = 'Attività eliminata. Le voci già registrate non cambiano.'
+  } catch {
+    error.value = 'Impossibile contattare il server.'
+  } finally {
+    catalogSaving.value = false
+  }
+}
+
 function requestSave(): void {
   if (saving.value) return
-  if (!selectedId.value) {
+  if (!selected.value) {
     error.value = "Scegli un'attività."
     return
   }
@@ -182,7 +274,7 @@ function cancelConfirmation(): void {
 
 async function save(): Promise<void> {
   confirming.value = false
-  if (saving.value || !selectedId.value || !startedAt.value || !endedAt.value) return
+  if (saving.value || !selected.value || !startedAt.value || !endedAt.value) return
 
   saving.value = true
   error.value = ''
@@ -193,7 +285,7 @@ async function save(): Promise<void> {
         method: editing.value ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          activityId: selectedId.value,
+          activityId: selected.value.id,
           localDate: props.date,
           startedAt: startedAt.value,
           endedAt: endedAt.value,
@@ -281,23 +373,52 @@ onMounted(loadCatalog)
             {{ catalogError }}
           </p>
 
-          <div v-else class="flex flex-wrap gap-2">
-            <button
+          <div v-else class="space-y-2">
+            <div
               v-for="activity in filtered"
               :key="activity.id"
-              type="button"
-              data-testid="activity-option"
-              :aria-pressed="selectedId === activity.id"
-              class="rounded-full border px-3 py-1.5 text-sm transition-colors"
+              class="flex items-center gap-1 rounded-xl border pr-1 transition-colors"
               :class="
                 selectedId === activity.id
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-border bg-card text-muted-foreground hover:border-foreground/25 hover:text-foreground'
+                  ? 'border-primary bg-primary/5'
+                  : 'border-border bg-card'
               "
-              @click="selectedId = activity.id"
             >
-              {{ activity.name }}
-            </button>
+              <button
+                type="button"
+                data-testid="activity-option"
+                :aria-pressed="selectedId === activity.id"
+                class="min-w-0 flex-1 truncate rounded-xl px-3 py-2 text-left text-sm"
+                :class="
+                  selectedId === activity.id
+                    ? 'font-medium text-foreground'
+                    : 'text-muted-foreground'
+                "
+                @click="selectedId = activity.id"
+              >
+                {{ activity.name }}
+              </button>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                type="button"
+                :aria-label="`Rinomina ${activity.name}`"
+                :disabled="catalogSaving"
+                @click="openRename(activity)"
+              >
+                <Pencil />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                type="button"
+                :aria-label="`Elimina ${activity.name}`"
+                :disabled="catalogSaving"
+                @click="askDelete(activity)"
+              >
+                <Trash2 />
+              </Button>
+            </div>
           </div>
 
           <p
@@ -305,6 +426,78 @@ onMounted(loadCatalog)
             class="rounded-xl border border-dashed border-border p-4 text-center text-xs text-muted-foreground"
           >
             Nessuna attività trovata.
+          </p>
+
+          <section
+            v-if="renaming"
+            data-testid="rename-activity"
+            class="space-y-2 rounded-xl border border-border bg-card p-3"
+          >
+            <p class="text-sm font-semibold">Rinomina attività</p>
+            <div class="space-y-1.5">
+              <Label for="catalog-activity-name">Nome</Label>
+              <Input
+                id="catalog-activity-name"
+                v-model="renameName"
+                :maxlength="MAX_NAME"
+                aria-label="Nuovo nome attività"
+              />
+            </div>
+            <div class="flex gap-2">
+              <Button
+                type="button"
+                data-testid="save-rename-activity"
+                :disabled="catalogSaving"
+                @click="saveRename"
+              >
+                Salva
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                data-testid="cancel-rename-activity"
+                @click="cancelRename"
+              >
+                Annulla
+              </Button>
+            </div>
+            <p class="text-[11px] text-muted-foreground">
+              Le voci già registrate non cambiano.
+            </p>
+          </section>
+
+          <section
+            v-if="deletingActivity"
+            data-testid="confirm-delete-catalog"
+            class="space-y-2 rounded-xl border border-destructive/40 p-3"
+          >
+            <p class="text-sm">Eliminare "{{ deletingActivity.name }}" dal catalogo?</p>
+            <p class="text-xs text-muted-foreground">
+              Le voci già registrate non cambiano: restano nel diario con il nome salvato.
+            </p>
+            <div class="flex gap-2">
+              <Button
+                type="button"
+                variant="destructive"
+                data-testid="confirm-delete-catalog-button"
+                :disabled="catalogSaving"
+                @click="confirmDelete"
+              >
+                Elimina
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                data-testid="cancel-delete-catalog"
+                @click="cancelDelete"
+              >
+                Annulla
+              </Button>
+            </div>
+          </section>
+
+          <p v-if="catalogFeedback" class="text-xs text-muted-foreground">
+            {{ catalogFeedback }}
           </p>
         </section>
 

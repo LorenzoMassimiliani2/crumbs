@@ -1,8 +1,10 @@
 import {
   createActivity,
   createActivityEntry,
+  deleteActivity,
   deleteActivityEntry,
   listActivities,
+  updateActivity,
   updateActivityEntry,
 } from './activities'
 import { verifyGoogleIdToken, type GoogleClaims } from './auth'
@@ -167,6 +169,16 @@ const routes: ApiRoute[] = [
     method: 'POST',
     pattern: /^\/api\/activities$/,
     handler: (request, env, userId) => createActivity(request, env, userId),
+  },
+  {
+    method: 'PATCH',
+    pattern: /^\/api\/activities\/([^/]+)$/,
+    handler: (request, env, userId, [id]) => updateActivity(request, env, userId, id!),
+  },
+  {
+    method: 'DELETE',
+    pattern: /^\/api\/activities\/([^/]+)$/,
+    handler: (_request, env, userId, [id]) => deleteActivity(env, userId, id!),
   },
   {
     method: 'POST',

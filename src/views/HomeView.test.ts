@@ -1092,3 +1092,173 @@ describe('activity entry editing and deletion', () => {
     expect(wrapper.find('[data-testid="add-activity-flow"]').exists()).toBe(true)
   })
 })
+
+describe('activity catalog management', () => {
+  it('renames a catalog activity from the flow and shows the new name', async () => {
+    stubDay()
+    stubActivities()
+    fetchStub().intercept(
+      (request) => request.method === 'PATCH' && request.url.endsWith('/api/activities/act-corsa'),
+      () => Response.json({ id: 'act-corsa', name: 'Corsa su strada', lastUsedAt: null }),
+    )
+
+    const wrapper = mount(HomeView)
+    await flushPromises()
+    await openActivityFlow(wrapper)
+
+    await wrapper.get('[aria-label="Rinomina Corsa"]').trigger('click')
+    expect(
+      (wrapper.get('#catalog-activity-name').element as HTMLInputElement).value,
+    ).toBe('Corsa')
+
+    await wrapper.get('#catalog-activity-name').setValue('  Corsa su strada ')
+    await wrapper.get('[data-testid="save-rename-activity"]').trigger('click')
+    await flushPromises()
+
+    const patch = fetchStub().requests.find((request) => request.method === 'PATCH')!
+    expect(patch.url).toMatch(/\/api\/activities\/act-corsa$/)
+    expect(await patch.json()).toEqual({ name: 'Corsa su strada' })
+
+    expect(
+      wrapper.findAll('[data-testid="activity-option"]').map((option) => option.text()),
+    ).toEqual(['Corsa su strada', 'Yoga'])
+    expect(wrapper.find('[data-testid="rename-activity"]').exists()).toBe(false)
+  })
+
+  it('blocks an empty name without calling the server', async () => {
+    stubDay()
+    stubActivities()
+
+    const wrapper = mount(HomeView)
+    await flushPromises()
+    await openActivityFlow(wrapper)
+
+    await wrapper.get('[aria-label="Rinomina Corsa"]').trigger('click')
+    await wrapper.get('#catalog-activity-name').setValue('   ')
+    await wrapper.get('[data-testid="save-rename-activity"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain("Il nome dell'attività è obbligatorio.")
+    expect(fetchStub().requests.some((request) => request.method === 'PATCH')).toBe(false)
+    expect(wrapper.find('[data-testid="rename-activity"]').exists()).toBe(true)
+  })
+
+  it('keeps the rename panel open and shows the server message when the rename fails', async () => {
+    stubDay()
+    stubActivities()
+    fetchStub().intercept(
+      (request) => request.method === 'PATCH',
+      () => Response.json({ error: 'Il nome può essere lungo al massimo 80 caratteri.' }, { status: 400 }),
+    )
+
+    const wrapper = mount(HomeView)
+    await flushPromises()
+    await openActivityFlow(wrapper)
+
+    await wrapper.get('[aria-label="Rinomina Corsa"]').trigger('click')
+    await wrapper.get('[data-testid="save-rename-activity"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Il nome può essere lungo al massimo 80 caratteri.')
+    expect(wrapper.find('[data-testid="rename-activity"]').exists()).toBe(true)
+  })
+
+  it('deletes a catalog activity only after confirmation and explains the saved entries', async () => {
+    stubDay()
+    stubActivities()
+    fetchStub().intercept(
+      (request) => request.method === 'DELETE' && request.url.endsWith('/api/activities/act-yoga'),
+      () => new Response(null, { status: 204 }),
+    )
+
+    const wrapper = mount(HomeView)
+    await flushPromises()
+    await openActivityFlow(wrapper)
+
+    await wrapper.get('[aria-label="Elimina Yoga"]').trigger('click')
+    expect(fetchStub().requests.some((request) => request.method === 'DELETE')).toBe(false)
+    expect(wrapper.get('[data-testid="confirm-delete-catalog"]').text()).toContain(
+      'Le voci già registrate non cambiano',
+    )
+
+    await wrapper.get('[data-testid="cancel-delete-catalog"]').trigger('click')
+    expect(wrapper.find('[data-testid="confirm-delete-catalog"]').exists()).toBe(false)
+    expect(fetchStub().requests.some((request) => request.method === 'DELETE')).toBe(false)
+
+    await wrapper.get('[aria-label="Elimina Yoga"]').trigger('click')
+    await wrapper.get('[data-testid="confirm-delete-catalog-button"]').trigger('click')
+    await flushPromises()
+
+    const remove = fetchStub().requests.find((request) => request.method === 'DELETE')!
+    expect(remove.url).toMatch(/\/api\/activities\/act-yoga$/)
+    expect(
+      wrapper.findAll('[data-testid="activity-option"]').map((option) => option.text()),
+    ).toEqual(['Corsa'])
+  })
+
+  it('clears the selection when the selected catalog activity is deleted', async () => {
+    stubDay()
+    stubActivities()
+    fetchStub().intercept(
+      (request) => request.method === 'DELETE' && request.url.endsWith('/api/activities/act-corsa'),
+      () => new Response(null, { status: 204 }),
+    )
+
+    const wrapper = mount(HomeView)
+    await flushPromises()
+    await openActivityFlow(wrapper)
+
+    await wrapper.get('[data-testid="activity-option"]').trigger('click')
+    await wrapper.get('[aria-label="Elimina Corsa"]').trigger('click')
+    await wrapper.get('[data-testid="confirm-delete-catalog-button"]').trigger('click')
+    await flushPromises()
+
+    await wrapper.get('[data-testid="save-activity"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain("Scegli un'attività.")
+    expect(
+      fetchStub().requests.filter(
+        (request) => request.method === 'POST' && request.url.endsWith('/api/activity-entries'),
+      ),
+    ).toHaveLength(0)
+  })
+
+  it('requires an existing activity to save an entry whose catalog entry was deleted', async () => {
+    fetchStub().intercept(/\/api\/days\//, () => Response.json(DAY_WITH_ACTIVITY))
+    fetchStub().intercept(
+      (request) => request.method === 'GET' && request.url.endsWith('/api/activities'),
+      () => Response.json([{ id: 'act-yoga', name: 'Yoga', lastUsedAt: null }]),
+    )
+    fetchStub().intercept(
+      (request) => request.method === 'PUT' && request.url.endsWith('/api/activity-entries/entry-camminata'),
+      () => Response.json({ id: 'entry-camminata' }),
+    )
+
+    const wrapper = mount(HomeView)
+    await flushPromises()
+    await openActivityEdit(wrapper)
+
+    expect(
+      wrapper
+        .findAll('[data-testid="activity-option"]')
+        .every((option) => option.attributes('aria-pressed') === 'false'),
+    ).toBe(true)
+
+    await wrapper.get('[data-testid="save-activity"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain("Scegli un'attività.")
+    expect(fetchStub().requests.some((request) => request.method === 'PUT')).toBe(false)
+
+    await wrapper
+      .findAll('[data-testid="activity-option"]')
+      .find((option) => option.text() === 'Yoga')!
+      .trigger('click')
+    await wrapper.get('[data-testid="save-activity"]').trigger('click')
+    await flushPromises()
+
+    const put = fetchStub().requests.find((request) => request.method === 'PUT')!
+    expect(await put.json()).toMatchObject({ activityId: 'act-yoga' })
+    expect(wrapper.find('[data-testid="add-activity-flow"]').exists()).toBe(false)
+  })
+})
